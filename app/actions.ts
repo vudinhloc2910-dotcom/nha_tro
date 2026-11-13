@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { checkPassword, clearSession, requireAdmin, setSession } from "@/lib/auth";
 import { all, one, run } from "@/lib/db";
 import { generateInvoice } from "@/lib/billing";
+import { parseImport, runImport } from "@/lib/import-sheet";
 import { today } from "@/lib/format";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -186,6 +187,25 @@ export async function deleteExtra(f: FormData) {
   await generateInvoice(inv.room_id, inv.month);
   refresh();
   back(`/invoices/${invId}`, { ok: "Đã xóa khoản phát sinh" });
+}
+
+/* ---------- Nhập dữ liệu từ sheet ---------- */
+export async function importSheetAction(f: FormData) {
+  await requireAdmin();
+  const file = f.get("file");
+  if (!(file instanceof File) || file.size === 0) back("/import", { err: "Hãy chọn file import-sheet.json" });
+  if ((file as File).size > 2_000_000) back("/import", { err: "File quá lớn (tối đa 2MB)" });
+  let result: Awaited<ReturnType<typeof runImport>> | null = null;
+  let error = "";
+  try {
+    const data = parseImport(JSON.parse(await (file as File).text()));
+    result = await runImport(data, { dry: f.get("mode") === "dry", applySettings: !!f.get("apply_settings") });
+  } catch (e) {
+    error = e instanceof SyntaxError ? "File không phải JSON hợp lệ." : e instanceof Error ? e.message : "Lỗi không xác định";
+  }
+  refresh();
+  if (!result) back("/import", { err: error });
+  back("/import", { ok: result!.summary, notes: result!.notes.join(" | ") });
 }
 
 /* ---------- Thu tiền ---------- */

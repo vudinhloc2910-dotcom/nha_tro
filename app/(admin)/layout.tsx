@@ -9,6 +9,7 @@ const NAV = [
   { href: "/readings", label: "Điện nước" },
   { href: "/invoices", label: "Hóa đơn" },
   { href: "/settings", label: "Cài đặt" },
+  { href: "/import", label: "Nhập sheet" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
