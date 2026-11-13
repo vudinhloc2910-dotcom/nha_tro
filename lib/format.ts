@@ -1,0 +1,27 @@
+export const vnd = (n: number) => `${Math.round(n).toLocaleString("vi-VN")} đ`;
+export const today = () => new Date().toISOString().slice(0, 10);
+export const currentMonth = () => today().slice(0, 7);
+export function prevMonth(m: string) {
+  const [y, mo] = m.split("-").map(Number);
+  return new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7);
+}
+export const monthLabel = (m: string) => `${m.slice(5)}/${m.slice(0, 4)}`;
+export function dateVN(d: string) {
+  const [y, m, day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+export type Status = "paid" | "partial" | "unpaid" | "overdue";
+export function statusOf(total: number, paid: number, due: string): Status {
+  if (paid >= total) return "paid";
+  if (due < today()) return "overdue";
+  return paid > 0 ? "partial" : "unpaid";
+}
+export const STATUS_LABEL: Record<Status, string> = {
+  paid: "Đã thu", partial: "Thu một phần", unpaid: "Chưa thu", overdue: "Quá hạn",
+};
+export const STATUS_CLASS: Record<Status, string> = {
+  paid: "bg-green-100 text-green-800",
+  partial: "bg-amber-100 text-amber-800",
+  unpaid: "bg-gray-100 text-gray-700",
+  overdue: "bg-red-100 text-red-800",
+};
