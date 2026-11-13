@@ -11,6 +11,9 @@ export async function generateInvoice(roomId: number, month: string): Promise<nu
   const room = await one<Room>("SELECT * FROM rooms WHERE id=?", roomId);
   const tenant = await one<Tenant>("SELECT name, people FROM tenants WHERE room_id=? AND active=1", roomId);
   if (!room || !tenant) return null;
+  // Hóa đơn đã khóa (nhập từ sheet) thì giữ nguyên, không tính lại
+  const existing = await one<{ id: number; locked: number }>("SELECT id, locked FROM invoices WHERE room_id=? AND month=?", roomId, month);
+  if (existing?.locked) return existing.id;
   const s = await getSettings();
   const lines: Line[] = [{ label: "Tiền thuê phòng", detail: "", amount: room.rent }];
 

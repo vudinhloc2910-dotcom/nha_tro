@@ -145,10 +145,19 @@ export async function generateInvoices(f: FormData) {
   refresh();
   back("/invoices", { month: m, ok: `Đã tạo/tính lại ${n} hóa đơn` });
 }
+const LOCKED_MSG = "Hóa đơn này nhập từ sheet nên đã khóa. Bấm 'Mở khóa' nếu muốn sửa và tính lại.";
+export async function unlockInvoice(f: FormData) {
+  await requireAdmin();
+  const id = num(f, "invoice_id");
+  await run("UPDATE invoices SET locked=0 WHERE id=?", id);
+  refresh();
+  back(`/invoices/${id}`, { ok: "Đã mở khóa. Bấm 'Tính lại' sẽ tính theo giá hiện tại và thay các khoản đã nhập." });
+}
 export async function regenerateInvoice(f: FormData) {
   await requireAdmin();
-  const inv = await one<{ room_id: number; month: string }>("SELECT room_id, month FROM invoices WHERE id=?", num(f, "invoice_id"));
+  const inv = await one<{ room_id: number; month: string; locked: number }>("SELECT room_id, month, locked FROM invoices WHERE id=?", num(f, "invoice_id"));
   if (!inv) redirect("/invoices");
+  if (inv.locked) back(`/invoices/${num(f, "invoice_id")}`, { err: LOCKED_MSG });
   await generateInvoice(inv.room_id, inv.month);
   refresh();
   back(`/invoices/${num(f, "invoice_id")}`, { ok: "Đã tính lại hóa đơn" });
@@ -156,8 +165,9 @@ export async function regenerateInvoice(f: FormData) {
 export async function addExtra(f: FormData) {
   await requireAdmin();
   const invId = num(f, "invoice_id");
-  const inv = await one<{ room_id: number; month: string }>("SELECT room_id, month FROM invoices WHERE id=?", invId);
+  const inv = await one<{ room_id: number; month: string; locked: number }>("SELECT room_id, month, locked FROM invoices WHERE id=?", invId);
   if (!inv) redirect("/invoices");
+  if (inv.locked) back(`/invoices/${invId}`, { err: LOCKED_MSG });
   const name = str(f, "name");
   const amount = Math.round(num(f, "amount"));
   if (!name || !amount) back(`/invoices/${invId}`, { err: "Nhập tên và số tiền phát sinh" });
@@ -169,8 +179,9 @@ export async function addExtra(f: FormData) {
 export async function deleteExtra(f: FormData) {
   await requireAdmin();
   const invId = num(f, "invoice_id");
-  const inv = await one<{ room_id: number; month: string }>("SELECT room_id, month FROM invoices WHERE id=?", invId);
+  const inv = await one<{ room_id: number; month: string; locked: number }>("SELECT room_id, month, locked FROM invoices WHERE id=?", invId);
   if (!inv) redirect("/invoices");
+  if (inv.locked) back(`/invoices/${invId}`, { err: LOCKED_MSG });
   await run("DELETE FROM extras WHERE id=? AND room_id=? AND month=?", num(f, "extra_id"), inv.room_id, inv.month);
   await generateInvoice(inv.room_id, inv.month);
   refresh();

@@ -3,7 +3,7 @@ import { statusOf, type Status } from "./format";
 
 export type InvoiceRow = {
   id: number; room_id: number; code: string; month: string; tenant_name: string; people: number;
-  prev_debt: number; total: number; due_date: string; token: string; paid: number; status: Status; has_reading: number;
+  prev_debt: number; total: number; due_date: string; token: string; paid: number; status: Status; has_reading: number; locked: number;
 };
 
 export async function invoicesOfMonth(month: string): Promise<InvoiceRow[]> {

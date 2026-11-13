@@ -54,6 +54,7 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL REFERENCES rooms(id), month TEXT NOT NULL,
     tenant_name TEXT DEFAULT '', people INTEGER DEFAULT 1, prev_debt INTEGER NOT NULL DEFAULT 0,
     total INTEGER NOT NULL DEFAULT 0, due_date TEXT NOT NULL, token TEXT UNIQUE NOT NULL,
+    locked INTEGER NOT NULL DEFAULT 0,
     UNIQUE(room_id, month)
   );
   CREATE TABLE IF NOT EXISTS invoice_lines(
@@ -69,6 +70,11 @@ const SCHEMA = `
 async function init() {
   const c = await getClient();
   await c.executeMultiple(SCHEMA);
+  // Nâng cấp database cũ: thêm cột "locked" (hóa đơn nhập từ sheet, không tự tính lại)
+  const cols = await c.execute("SELECT name FROM pragma_table_info('invoices')");
+  if (!cols.rows.some((r) => r.name === "locked")) {
+    await c.execute("ALTER TABLE invoices ADD COLUMN locked INTEGER NOT NULL DEFAULT 0");
+  }
   const n = Number((await c.execute("SELECT COUNT(*) c FROM rooms")).rows[0].c);
   if (n > 0) return;
   // Giá thuê lấy từ Google Sheet tháng 8/2026 (theo thứ tự phòng).

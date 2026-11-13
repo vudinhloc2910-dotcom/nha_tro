@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { all, one } from "@/lib/db";
 import { dateVN, monthLabel, statusOf, today, vnd } from "@/lib/format";
-import { addExtra, addPayment, deleteExtra, deletePayment, regenerateInvoice } from "../../../actions";
+import { addExtra, addPayment, deleteExtra, deletePayment, regenerateInvoice, unlockInvoice } from "../../../actions";
 import { Flash, StatusBadge } from "../../../components";
+import { PrintButton } from "../../../print-button";
 import { btnCls, btnDangerCls, btnGhostCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
 
-type Inv = { id: number; room_id: number; code: string; month: string; tenant_name: string; total: number; due_date: string; token: string };
+type Inv = { id: number; room_id: number; code: string; month: string; tenant_name: string; total: number; due_date: string; token: string; locked: number };
 
 export default async function InvoicePage({
   params, searchParams,
@@ -32,6 +33,7 @@ export default async function InvoicePage({
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold">Phòng {inv.code} — tháng {monthLabel(inv.month)}</h1>
         <StatusBadge status={status} />
+        {inv.locked ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Nhập từ sheet (đã khóa)</span> : null}
       </div>
       <Flash ok={sp.ok} err={sp.err} />
 
@@ -50,7 +52,12 @@ export default async function InvoicePage({
         </table>
         <div className="no-print mt-4 flex flex-wrap items-center gap-2">
           <Link href={`/pay/${inv.token}`} target="_blank" className={btnGhostCls}>Mở trang gửi khách (có QR)</Link>
-          <form action={regenerateInvoice}><input type="hidden" name="invoice_id" value={inv.id} /><button className={btnGhostCls}>Tính lại</button></form>
+          <PrintButton />
+          {inv.locked ? (
+            <form action={unlockInvoice}><input type="hidden" name="invoice_id" value={inv.id} /><button className={btnGhostCls}>Mở khóa</button></form>
+          ) : (
+            <form action={regenerateInvoice}><input type="hidden" name="invoice_id" value={inv.id} /><button className={btnGhostCls}>Tính lại</button></form>
+          )}
         </div>
         <p className="no-print mt-2 text-xs text-gray-500">Gửi khách đường dẫn: <code className="break-all">/pay/{inv.token}</code> (thêm địa chỉ web của bạn ở phía trước).</p>
       </section>
@@ -80,7 +87,7 @@ export default async function InvoicePage({
         </form>
       </section>
 
-      <section className={`${cardCls} no-print`}>
+      {!inv.locked && <section className={`${cardCls} no-print`}>
         <h2 className="mb-3 font-semibold">Khoản phát sinh của phòng trong tháng này</h2>
         {extras.length > 0 && (
           <ul className="mb-4 divide-y divide-gray-100 text-sm">
@@ -101,7 +108,7 @@ export default async function InvoicePage({
           <div><label className={labelCls}>Số tiền (đ)</label><input name="amount" type="number" required className={inputCls} /></div>
           <div className="flex items-end"><button className={btnCls}>Thêm</button></div>
         </form>
-      </section>
+      </section>}
     </div>
   );
 }
