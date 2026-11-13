@@ -19,6 +19,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p className="mb-3 text-xs text-amber-700">Đơn giá điện, nước ban đầu chỉ là số tạm. Hãy nhập giá thật trước khi tạo hóa đơn.</p>
         <form action={saveSettings} className="grid gap-3 sm:grid-cols-3">
           <div className="sm:col-span-3"><label className={labelCls}>Tên nhà trọ</label><input name="house_name" defaultValue={s.house_name} className={inputCls} /></div>
+          <div><label className={labelCls}>Số điện thoại chủ trọ (hiện trên hóa đơn)</label><input name="house_phone" defaultValue={s.house_phone ?? ""} className={inputCls} /></div>
+          <div className="sm:col-span-2"><label className={labelCls}>Địa chỉ nhà trọ (hiện trên hóa đơn)</label><input name="house_address" defaultValue={s.house_address ?? ""} className={inputCls} /></div>
           <div><label className={labelCls}>Giá điện (đ/kWh)</label><input name="elec_price" type="number" min="0" defaultValue={s.elec_price} className={inputCls} /></div>
           <div>
             <label className={labelCls}>Cách tính nước</label>

@@ -78,7 +78,7 @@ export async function checkoutTenant(f: FormData) {
 /* ---------- Cài đặt ---------- */
 export async function saveSettings(f: FormData) {
   await requireAdmin();
-  const keys = ["house_name", "elec_price", "water_mode", "water_price", "bank_code", "bank_account", "bank_holder"];
+  const keys = ["house_name", "house_phone", "house_address", "elec_price", "water_mode", "water_price", "bank_code", "bank_account", "bank_holder"];
   for (const k of keys) {
     let v = str(f, k);
     if (k === "water_mode" && v !== "meter" && v !== "person") v = "meter";
@@ -107,12 +107,10 @@ export async function deleteService(f: FormData) {
 }
 
 /* ---------- Chỉ số điện nước ---------- */
-export async function saveReadings(f: FormData) {
-  await requireAdmin();
-  const m = month(f);
+async function processReadings(f: FormData, m: string) {
   const ids = str(f, "ids").split(",").map(Number).filter(Boolean);
   const errors: string[] = [];
-  let saved = 0;
+  const saved: number[] = [];
   for (const id of ids) {
     const en = str(f, `en_${id}`), wn = str(f, `wn_${id}`);
     if (en === "" && wn === "") continue;
@@ -127,13 +125,35 @@ export async function saveReadings(f: FormData) {
        ON CONFLICT(room_id,month) DO UPDATE SET elec_old=excluded.elec_old, elec_new=excluded.elec_new, water_old=excluded.water_old, water_new=excluded.water_new`,
       id, m, eo, enN, wo, wnN
     );
-    saved++;
+    saved.push(id);
   }
+  return { saved, errors };
+}
+
+export async function saveReadings(f: FormData) {
+  await requireAdmin();
+  const m = month(f);
+  const { saved, errors } = await processReadings(f, m);
   refresh();
   const p: Record<string, string> = { month: m };
   if (errors.length) p.err = errors.join(" | ");
-  if (saved) p.ok = `Đã lưu ${saved} phòng`;
+  if (saved.length) p.ok = `Đã lưu ${saved.length} phòng`;
   back("/readings", p);
+}
+
+/** Trang "Hóa đơn tháng": lưu chỉ số điện nước và tạo hóa đơn (link cho khách) bằng một nút. */
+export async function saveAndGenerate(f: FormData) {
+  await requireAdmin();
+  const m = month(f);
+  const { saved, errors } = await processReadings(f, m);
+  let made = 0;
+  for (const id of saved) if (await generateInvoice(id, m)) made++;
+  refresh();
+  const p: Record<string, string> = { month: m };
+  if (errors.length) p.err = errors.join(" | ");
+  if (made) p.ok = `Đã tạo ${made} hóa đơn. Bấm "Chép link" hoặc "Chép tin nhắn" ở từng phòng để gửi khách.`;
+  else if (!errors.length) p.err = "Chưa có phòng nào được nhập số mới.";
+  back("/", p);
 }
 
 /* ---------- Hóa đơn ---------- */
