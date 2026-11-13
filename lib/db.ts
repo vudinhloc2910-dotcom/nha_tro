@@ -7,7 +7,7 @@ import fs from "node:fs";
  */
 const g = globalThis as unknown as { __nhatro_client?: Client; __nhatro_ready?: Promise<void> };
 
-async function getClient(): Promise<Client> {
+export async function getClient(): Promise<Client> {
   if (!g.__nhatro_client) {
     const rawUrl = process.env.TURSO_DATABASE_URL?.trim();
     if (rawUrl) {
