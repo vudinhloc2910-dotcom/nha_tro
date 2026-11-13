@@ -9,11 +9,13 @@ const g = globalThis as unknown as { __nhatro_client?: Client; __nhatro_ready?: 
 
 async function getClient(): Promise<Client> {
   if (!g.__nhatro_client) {
-    const url = process.env.TURSO_DATABASE_URL;
-    if (url) {
-      // Chạy trên mạng: dùng bản web (không cần thư viện native)
+    const rawUrl = process.env.TURSO_DATABASE_URL?.trim();
+    if (rawUrl) {
+      // Chạy trên mạng: dùng bản web (không cần thư viện native).
+      // Đổi libsql:// thành https:// để đi qua HTTP, chạy được trên mọi phiên bản Node (không cần WebSocket).
+      const url = rawUrl.replace(/^libsql:\/\//, "https://");
       const { createClient } = await import("@libsql/client/web");
-      g.__nhatro_client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+      g.__nhatro_client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN?.trim() });
     } else {
       const { createClient } = await import("@libsql/client");
       fs.mkdirSync("data", { recursive: true });
@@ -79,11 +81,13 @@ async function init() {
     ["302", 3500000, 25, 2, "Khách mẫu"],
     ["303", 4000000, 30, 2, "Khách mẫu"],
   ];
+  // Gộp toàn bộ dữ liệu mẫu vào MỘT giao dịch: hoặc đủ hết hoặc không gì cả (tránh nửa chừng khi mạng chậm).
+  const stmts: { sql: string; args: InValue[] }[] = [];
   for (const [code, rent, due, people, name] of rooms) {
-    const r = await c.execute({ sql: "INSERT INTO rooms(code, rent, due_day) VALUES (?,?,?)", args: [code, rent, due] });
-    await c.execute({
-      sql: "INSERT INTO tenants(room_id, name, people, move_in) VALUES (?,?,?,?)",
-      args: [Number(r.lastInsertRowid), `${name} P.${code}`, people, "2026-01-01"],
+    stmts.push({ sql: "INSERT INTO rooms(code, rent, due_day) VALUES (?,?,?)", args: [code, rent, due] });
+    stmts.push({
+      sql: "INSERT INTO tenants(room_id, name, people, move_in) VALUES ((SELECT id FROM rooms WHERE code=?),?,?,?)",
+      args: [code, `${name} P.${code}`, people, "2026-01-01"],
     });
   }
   const settings: Record<string, string> = {
@@ -96,19 +100,32 @@ async function init() {
     bank_holder: "VU DINH LOC",
   };
   for (const [k, v] of Object.entries(settings)) {
-    await c.execute({ sql: "INSERT INTO settings(key,value) VALUES (?,?)", args: [k, v] });
+    stmts.push({ sql: "INSERT OR IGNORE INTO settings(key,value) VALUES (?,?)", args: [k, v] });
   }
   // Dịch vụ TẠM — sửa trong Cài đặt
   const svc: [string, string, number][] = [["Wifi", "room", 100000], ["Vệ sinh, rác", "person", 20000], ["Máy giặt", "room", 108000]];
   for (const [name, type, price] of svc) {
-    await c.execute({ sql: "INSERT INTO services(name,type,price) VALUES (?,?,?)", args: [name, type, price] });
+    stmts.push({ sql: "INSERT INTO services(name,type,price) VALUES (?,?,?)", args: [name, type, price] });
   }
+  await c.batch(stmts, "write");
 }
 
 async function ready(): Promise<Client> {
-  g.__nhatro_ready ??= init();
+  if (!g.__nhatro_ready) {
+    // Nếu khởi tạo lỗi thì xóa kết quả lỗi để lần sau thử lại (không kẹt lỗi vĩnh viễn)
+    g.__nhatro_ready = init().catch((e) => {
+      g.__nhatro_ready = undefined;
+      throw e;
+    });
+  }
   await g.__nhatro_ready;
   return getClient();
+}
+
+/** Dùng cho trang kiểm tra /api/health */
+export async function pingDb(): Promise<void> {
+  const c = await ready();
+  await c.execute("SELECT 1");
 }
 
 type P = InValue;
