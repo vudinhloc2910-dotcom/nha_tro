@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { all } from "@/lib/db";
 import { currentMonth, dateVN, monthLabel, prevMonth, statusOf, vnd } from "@/lib/format";
+import { currentHouse } from "@/lib/house";
 import { saveAndGenerate } from "../actions";
 import { Flash, MonthPicker, StatusBadge } from "../components";
 import { CopyButton } from "../copy-button";
@@ -15,6 +16,7 @@ type Row = {
 
 export default async function MonthlyPage({ searchParams }: { searchParams: Promise<{ month?: string; ok?: string; err?: string }> }) {
   const sp = await searchParams;
+  const house = await currentHouse();
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
   const rows = await all<Row>(
     `SELECT r.id, r.code, t.name AS tenant, t.people,
@@ -27,8 +29,9 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Prom
      LEFT JOIN readings c ON c.room_id=r.id AND c.month=?
      LEFT JOIN readings p ON p.room_id=r.id AND p.month=?
      LEFT JOIN invoices i ON i.room_id=r.id AND i.month=?
+     WHERE r.house_id=?
      ORDER BY r.code`,
-    month, prevMonth(month), month
+    month, prevMonth(month), month, house.id
   );
   const billed = rows.reduce((a, r) => a + (r.total ?? 0), 0);
   const collected = rows.reduce((a, r) => a + Math.min(r.paid, r.total ?? 0), 0);
@@ -37,7 +40,7 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Prom
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold">Hóa đơn tháng {monthLabel(month)}</h1>
+        <div><h1 className="text-xl font-bold">Hóa đơn tháng {monthLabel(month)}</h1><p className="text-sm text-gray-600">{house.name}</p></div>
         <MonthPicker action="/" month={month} />
       </div>
       <Flash ok={sp.ok} err={sp.err} />

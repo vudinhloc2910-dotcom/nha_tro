@@ -5,14 +5,14 @@ import { PrintButton } from "../../print-button";
 
 export const metadata = { title: "Hóa đơn tiền trọ", robots: { index: false, follow: false } };
 
-type Inv = { id: number; code: string; month: string; tenant_name: string; people: number; total: number; due_date: string };
+type Inv = { id: number; house_id: number; code: string; month: string; tenant_name: string; people: number; total: number; due_date: string };
 
 export default async function PayPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   if (!/^[0-9a-f]{24}$/.test(token)) notFound();
-  const inv = await one<Inv>("SELECT i.*, r.code FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.token=?", token);
+  const inv = await one<Inv>("SELECT i.*, r.code, r.house_id FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.token=?", token);
   if (!inv) notFound();
-  const s = await getSettings();
+  const s = await getSettings(inv.house_id);
   const lines = await all<{ label: string; detail: string; amount: number }>("SELECT * FROM invoice_lines WHERE invoice_id=? ORDER BY id", inv.id);
   const payments = await all<{ amount: number; paid_at: string; method: string }>("SELECT amount, paid_at, method FROM payments WHERE invoice_id=? ORDER BY paid_at, id", inv.id);
   const paid = payments.reduce((a, p) => a + p.amount, 0);
@@ -34,7 +34,7 @@ export default async function PayPage({ params }: { params: Promise<{ token: str
     <main className="mx-auto max-w-sm px-3 py-5 print:max-w-none print:p-0">
       <div className="rounded-xl bg-white p-5 text-gray-900 shadow-md print:rounded-none print:shadow-none">
         <header className="text-center">
-          <h1 className="text-lg font-extrabold uppercase tracking-wide text-blue-900">{s.house_name}</h1>
+          <h1 className="text-lg font-extrabold uppercase tracking-wide text-blue-900">Nhà trọ {s.house_name}</h1>
           {s.house_address && <p className="text-xs text-gray-600">{s.house_address}</p>}
           {s.house_phone && <p className="text-xs text-gray-600">ĐT: {s.house_phone}</p>}
           <p className="mt-3 text-base font-bold">HÓA ĐƠN TIỀN TRỌ</p>

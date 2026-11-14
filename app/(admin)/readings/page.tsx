@@ -1,4 +1,5 @@
 import { all } from "@/lib/db";
+import { currentHouse } from "@/lib/house";
 import { currentMonth, monthLabel, prevMonth } from "@/lib/format";
 import { saveReadings } from "../../actions";
 import { Flash, MonthPicker } from "../../components";
@@ -12,6 +13,7 @@ type Row = {
 
 export default async function ReadingsPage({ searchParams }: { searchParams: Promise<{ month?: string; ok?: string; err?: string }> }) {
   const sp = await searchParams;
+  const house = await currentHouse();
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
   const rows = await all<Row>(
     `SELECT r.id, r.code, t.people,
@@ -21,8 +23,9 @@ export default async function ReadingsPage({ searchParams }: { searchParams: Pro
      LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1
      LEFT JOIN readings c ON c.room_id=r.id AND c.month=?
      LEFT JOIN readings p ON p.room_id=r.id AND p.month=?
+     WHERE r.house_id=?
      ORDER BY r.code`,
-    month, prevMonth(month)
+    month, prevMonth(month), house.id
   );
   const occupied = rows.filter((r) => r.people !== null);
   return (

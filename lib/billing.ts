@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { all, one, run, batch, getSettings } from "./db";
 import { prevMonth, vnd } from "./format";
 
-type Room = { id: number; code: string; rent: number; due_day: number };
+type Room = { id: number; house_id: number; code: string; rent: number; due_day: number };
 type Tenant = { name: string; people: number };
 type Line = { label: string; detail: string; amount: number };
 
@@ -14,7 +14,7 @@ export async function generateInvoice(roomId: number, month: string): Promise<nu
   // Hóa đơn đã khóa (nhập từ sheet) thì giữ nguyên, không tính lại
   const existing = await one<{ id: number; locked: number }>("SELECT id, locked FROM invoices WHERE room_id=? AND month=?", roomId, month);
   if (existing?.locked) return existing.id;
-  const s = await getSettings();
+  const s = await getSettings(room.house_id);
   const lines: Line[] = [{ label: "Tiền thuê phòng", detail: "", amount: room.rent }];
 
   const rd = await one<{ elec_old: number; elec_new: number; water_old: number; water_new: number }>(
@@ -33,7 +33,7 @@ export async function generateInvoice(roomId: number, month: string): Promise<nu
     lines.push({ label: "Tiền nước", detail: `${rd.water_old} → ${rd.water_new} = ${m3} m³ × ${vnd(wPrice)}`, amount: Math.round(m3 * wPrice) });
   }
 
-  for (const sv of await all<{ name: string; type: string; price: number }>("SELECT * FROM services WHERE active=1 ORDER BY id")) {
+  for (const sv of await all<{ name: string; type: string; price: number }>("SELECT * FROM services WHERE active=1 AND house_id=? ORDER BY id", room.house_id)) {
     if (sv.type === "person") lines.push({ label: sv.name, detail: `${tenant.people} người × ${vnd(sv.price)}`, amount: tenant.people * sv.price });
     else lines.push({ label: sv.name, detail: "", amount: sv.price });
   }

@@ -1,11 +1,12 @@
 import { isAdmin } from "@/lib/auth";
 import { allInvoices } from "@/lib/queries";
+import { currentHouse } from "@/lib/house";
 
 const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
 
 export async function GET() {
   if (!(await isAdmin())) return new Response("Unauthorized", { status: 401 });
-  const rows = await allInvoices();
+  const rows = await allInvoices((await currentHouse()).id);
   const head = ["Tháng", "Phòng", "Khách", "Tổng", "Đã thu", "Còn lại", "Hạn đóng", "Trạng thái"];
   const label = { paid: "Đã thu", partial: "Thu một phần", unpaid: "Chưa thu", overdue: "Quá hạn" } as const;
   const body = rows.map((r) =>

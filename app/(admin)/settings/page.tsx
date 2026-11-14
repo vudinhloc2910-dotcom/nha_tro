@@ -1,5 +1,6 @@
 import { all, getSettings } from "@/lib/db";
-import { deleteService, saveService, saveSettings } from "../../actions";
+import { currentHouse } from "@/lib/house";
+import { addHouse, deleteService, saveService, saveSettings } from "../../actions";
 import { Flash } from "../../components";
 import { btnCls, btnDangerCls, btnGhostCls, cardCls, inputCls, labelCls } from "@/lib/ui";
 
@@ -7,18 +8,19 @@ type Svc = { id: number; name: string; type: string; price: number; active: numb
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string }> }) {
   const sp = await searchParams;
-  const s = await getSettings();
-  const services = await all<Svc>("SELECT * FROM services ORDER BY id");
+  const house = await currentHouse();
+  const s = await getSettings(house.id);
+  const services = await all<Svc>("SELECT * FROM services WHERE house_id=? ORDER BY id", house.id);
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold">Cài đặt</h1>
+      <h1 className="text-xl font-bold">Cài đặt <span className="text-base font-normal text-gray-600">· {house.name}</span></h1>
       <Flash ok={sp.ok} err={sp.err} />
 
       <section className={cardCls}>
-        <h2 className="mb-1 font-semibold">Giá điện, nước và tài khoản nhận tiền</h2>
+        <h2 className="mb-1 font-semibold">Giá điện, nước và tài khoản nhận tiền của nhà này</h2>
         <p className="mb-3 text-xs text-amber-700">Đơn giá điện, nước ban đầu chỉ là số tạm. Hãy nhập giá thật trước khi tạo hóa đơn.</p>
         <form action={saveSettings} className="grid gap-3 sm:grid-cols-3">
-          <div className="sm:col-span-3"><label className={labelCls}>Tên nhà trọ</label><input name="house_name" defaultValue={s.house_name} className={inputCls} /></div>
+          <div className="sm:col-span-3"><label className={labelCls}>Tên nhà</label><input name="house_name" defaultValue={s.house_name} className={inputCls} /></div>
           <div><label className={labelCls}>Số điện thoại chủ trọ (hiện trên hóa đơn)</label><input name="house_phone" defaultValue={s.house_phone ?? ""} className={inputCls} /></div>
           <div className="sm:col-span-2"><label className={labelCls}>Địa chỉ nhà trọ (hiện trên hóa đơn)</label><input name="house_address" defaultValue={s.house_address ?? ""} className={inputCls} /></div>
           <div><label className={labelCls}>Giá điện (đ/kWh)</label><input name="elec_price" type="number" min="0" defaultValue={s.elec_price} className={inputCls} /></div>
@@ -33,6 +35,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div><label className={labelCls}>Mã ngân hàng (VietQR)</label><input name="bank_code" defaultValue={s.bank_code} className={inputCls} placeholder="TCB" /></div>
           <div><label className={labelCls}>Số tài khoản</label><input name="bank_account" defaultValue={s.bank_account} className={inputCls} /></div>
           <div><label className={labelCls}>Tên chủ tài khoản</label><input name="bank_holder" defaultValue={s.bank_holder} className={inputCls} /></div>
+          <div><label className={labelCls}>Tiền thuê nhà trả chủ (đ/tháng, quy ra mỗi tháng)</label><input name="rent_cost_monthly" type="number" min="0" defaultValue={s.rent_cost_monthly} className={inputCls} /></div>
+          <div><label className={labelCls}>Lương quản lý (đ/tháng, 0 = không có)</label><input name="manager_salary" type="number" min="0" defaultValue={s.manager_salary} className={inputCls} /></div>
+          <div><label className={labelCls}>Chia lãi (VD: Tài:50, Lộc:50)</label><input name="partners" defaultValue={s.partners} className={inputCls} placeholder="Để trống nếu không chia" /></div>
           <div><button className={btnCls}>Lưu cài đặt</button></div>
         </form>
       </section>
@@ -69,6 +74,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
           <div><label className={labelCls}>Giá (đ)</label><input name="price" type="number" min="0" className={`${inputCls} w-32`} /></div>
           <button className={btnCls}>Thêm</button>
+        </form>
+      </section>
+
+      <section className={cardCls}>
+        <h2 className="mb-3 font-semibold">Thêm nhà mới</h2>
+        <form action={addHouse} className="grid gap-3 sm:grid-cols-3">
+          <div><label className={labelCls}>Tên nhà</label><input name="name" required className={inputCls} placeholder="VD: 15 ngõ 20 Cầu Giấy" /></div>
+          <div className="sm:col-span-2"><label className={labelCls}>Địa chỉ</label><input name="address" className={inputCls} /></div>
+          <div><button className={btnCls}>Thêm nhà</button></div>
         </form>
       </section>
     </div>

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { checkPassword, clearSession, requireAdmin, setSession } from "@/lib/auth";
 import { all, one, run } from "@/lib/db";
+import { currentHouse, setCurrentHouse } from "@/lib/house";
 import { generateInvoice } from "@/lib/billing";
 import { parseImport, runImport } from "@/lib/import-sheet";
 import { today } from "@/lib/format";
@@ -37,13 +38,33 @@ export async function logout() {
   redirect("/login");
 }
 
+/* ---------- Nhà ---------- */
+export async function selectHouse(f: FormData) {
+  await requireAdmin();
+  const id = num(f, "house");
+  if (!(await one("SELECT id FROM houses WHERE id=?", id))) return;
+  await setCurrentHouse(id);
+  const to = str(f, "back");
+  redirect(to.startsWith("/") && !to.startsWith("//") ? to : "/");
+}
+export async function addHouse(f: FormData) {
+  await requireAdmin();
+  const name = str(f, "name");
+  if (!name) back("/settings", { err: "Nhập tên nhà" });
+  const r = await run("INSERT INTO houses(name,address,sort) VALUES (?,?,(SELECT COALESCE(MAX(sort),0)+1 FROM houses))", name, str(f, "address"));
+  await setCurrentHouse(r.lastInsertRowid);
+  refresh();
+  back("/settings", { ok: `Đã thêm nhà "${name}". Hãy cài giá điện, nước và tài khoản nhận tiền cho nhà này.` });
+}
+
 /* ---------- Phòng & khách ---------- */
 export async function addRoom(f: FormData) {
   await requireAdmin();
   const code = str(f, "code");
   if (!code) back("/rooms", { err: "Nhập số phòng" });
-  if (await one("SELECT id FROM rooms WHERE code=?", code)) back("/rooms", { err: `Phòng ${code} đã có` });
-  const r = await run("INSERT INTO rooms(code, rent, due_day) VALUES (?,?,?)", code, num(f, "rent"), num(f, "due_day") || 15);
+  const house = await currentHouse();
+  if (await one("SELECT id FROM rooms WHERE house_id=? AND code=?", house.id, code)) back("/rooms", { err: `Phòng ${code} đã có` });
+  const r = await run("INSERT INTO rooms(house_id, code, rent, due_day) VALUES (?,?,?,?)", house.id, code, num(f, "rent"), num(f, "due_day") || 15);
   refresh();
   redirect(`/rooms/${r.lastInsertRowid}`);
 }
@@ -78,12 +99,17 @@ export async function checkoutTenant(f: FormData) {
 /* ---------- Cài đặt ---------- */
 export async function saveSettings(f: FormData) {
   await requireAdmin();
-  const keys = ["house_name", "house_phone", "house_address", "elec_price", "water_mode", "water_price", "bank_code", "bank_account", "bank_holder"];
+  const house = await currentHouse();
+  const name = str(f, "house_name");
+  if (!name) back("/settings", { err: "Nhập tên nhà" });
+  await run("UPDATE houses SET name=?, address=? WHERE id=?", name, str(f, "house_address"), house.id);
+  const keys = ["house_phone", "elec_price", "water_mode", "water_price", "bank_code", "bank_account", "bank_holder", "rent_cost_monthly", "manager_salary", "partners"];
   for (const k of keys) {
     let v = str(f, k);
     if (k === "water_mode" && v !== "meter" && v !== "person") v = "meter";
     if (k === "bank_account") v = v.replace(/\s+/g, "");
-    await run("INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", k, v);
+    if (k === "rent_cost_monthly" || k === "manager_salary") v = String(Math.max(0, Number(v.replace(/[^\d]/g, "")) || 0));
+    await run("INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value", house.id, k, v);
   }
   refresh();
   back("/settings", { ok: "Đã lưu cài đặt. Hóa đơn đã tạo cần bấm 'Tính lại' để áp dụng giá mới." });
@@ -94,14 +120,15 @@ export async function saveService(f: FormData) {
   const type = str(f, "type") === "person" ? "person" : "room";
   const name = str(f, "name");
   if (!name) back("/settings", { err: "Nhập tên dịch vụ" });
-  if (id) await run("UPDATE services SET name=?, type=?, price=?, active=? WHERE id=?", name, type, Math.max(0, num(f, "price")), f.get("active") ? 1 : 0, id);
-  else await run("INSERT INTO services(name,type,price) VALUES (?,?,?)", name, type, Math.max(0, num(f, "price")));
+  const house = await currentHouse();
+  if (id) await run("UPDATE services SET name=?, type=?, price=?, active=? WHERE id=? AND house_id=?", name, type, Math.max(0, num(f, "price")), f.get("active") ? 1 : 0, id, house.id);
+  else await run("INSERT INTO services(house_id,name,type,price) VALUES (?,?,?,?)", house.id, name, type, Math.max(0, num(f, "price")));
   refresh();
   back("/settings", { ok: "Đã lưu dịch vụ" });
 }
 export async function deleteService(f: FormData) {
   await requireAdmin();
-  await run("DELETE FROM services WHERE id=?", num(f, "id"));
+  await run("DELETE FROM services WHERE id=? AND house_id=?", num(f, "id"), (await currentHouse()).id);
   refresh();
   back("/settings", { ok: "Đã xóa dịch vụ (hóa đơn cũ giữ nguyên)" });
 }
@@ -160,7 +187,7 @@ export async function saveAndGenerate(f: FormData) {
 export async function generateInvoices(f: FormData) {
   await requireAdmin();
   const m = month(f);
-  const rooms = await all<{ id: number }>("SELECT id FROM rooms ORDER BY code");
+  const rooms = await all<{ id: number }>("SELECT id FROM rooms WHERE house_id=? ORDER BY code", (await currentHouse()).id);
   let n = 0;
   for (const r of rooms) if (await generateInvoice(r.id, m)) n++;
   refresh();
@@ -213,13 +240,18 @@ export async function deleteExtra(f: FormData) {
 export async function importSheetAction(f: FormData) {
   await requireAdmin();
   const file = f.get("file");
-  if (!(file instanceof File) || file.size === 0) back("/import", { err: "Hãy chọn file import-sheet.json" });
-  if ((file as File).size > 2_000_000) back("/import", { err: "File quá lớn (tối đa 2MB)" });
+  if (!(file instanceof File) || file.size === 0) back("/import", { err: "Hãy chọn file dữ liệu (.json)" });
+  if ((file as File).size > 3_000_000) back("/import", { err: "File quá lớn (tối đa 3MB)" });
   let result: Awaited<ReturnType<typeof runImport>> | null = null;
   let error = "";
   try {
     const data = parseImport(JSON.parse(await (file as File).text()));
-    result = await runImport(data, { dry: f.get("mode") === "dry", applySettings: !!f.get("apply_settings") });
+    // File ghi rõ tên nhà thì nạp đúng nhà đó (không phụ thuộc nhà đang chọn trên thanh trên cùng)
+    const target = data.house ? await one<{ id: number; name: string }>("SELECT id, name FROM houses WHERE name=?", data.house) : undefined;
+    if (data.house && !target) throw new Error(`Chưa có nhà "${data.house}" trong web. Hãy thêm nhà đó trong Cài đặt hoặc kiểm tra lại tên nhà.`);
+    const house = target ?? (await currentHouse());
+    if (f.get("mode") !== "dry") await setCurrentHouse(house.id);
+    result = await runImport(data, { houseId: house.id, houseName: house.name, dry: f.get("mode") === "dry", applySettings: !!f.get("apply_settings") });
   } catch (e) {
     error = e instanceof SyntaxError ? "File không phải JSON hợp lệ." : e instanceof Error ? e.message : "Lỗi không xác định";
   }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { all } from "@/lib/db";
+import { currentHouse } from "@/lib/house";
 import { vnd } from "@/lib/format";
 import { addRoom } from "../../actions";
 import { Flash } from "../../components";
@@ -9,13 +10,15 @@ type Row = { id: number; code: string; rent: number; due_day: number; name: stri
 
 export default async function RoomsPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string }> }) {
   const sp = await searchParams;
+  const house = await currentHouse();
   const rooms = await all<Row>(
     `SELECT r.id, r.code, r.rent, r.due_day, t.name, t.people
-     FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 ORDER BY r.code`
+     FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`,
+    house.id
   );
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold">Phòng & khách thuê</h1>
+      <h1 className="text-xl font-bold">Phòng & khách thuê <span className="text-base font-normal text-gray-600">· {house.name}</span></h1>
       <Flash ok={sp.ok} err={sp.err} />
       <section className={`${cardCls} overflow-x-auto`}>
         <table className="w-full">

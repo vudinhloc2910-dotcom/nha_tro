@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { invoicesOfMonth } from "@/lib/queries";
+import { currentHouse } from "@/lib/house";
 import { currentMonth, dateVN, monthLabel, vnd } from "@/lib/format";
 import { generateInvoices } from "../../actions";
 import { Flash, MonthPicker, StatusBadge } from "../../components";
@@ -8,7 +9,8 @@ import { btnCls, cardCls, tdCls, thCls } from "@/lib/ui";
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ month?: string; ok?: string; err?: string }> }) {
   const sp = await searchParams;
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
-  const invoices = await invoicesOfMonth(month);
+  const house = await currentHouse();
+  const invoices = await invoicesOfMonth(house.id, month);
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">

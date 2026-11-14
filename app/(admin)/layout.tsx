@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { logout } from "../actions";
-import { getSettings } from "@/lib/db";
+import { listHouses } from "@/lib/db";
+import { currentHouse } from "@/lib/house";
+import { HouseSwitcher } from "../house-switcher";
 
 const MAIN = [
+  { href: "/overview", label: "Tổng quan" },
   { href: "/", label: "Hóa đơn tháng" },
+  { href: "/history", label: "Lịch sử thu" },
+  { href: "/reports", label: "Báo cáo" },
   { href: "/rooms", label: "Phòng" },
   { href: "/settings", label: "Cài đặt" },
 ];
@@ -16,12 +21,13 @@ const MORE = [
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
-  const s = await getSettings();
+  const houses = await listHouses();
+  const house = await currentHouse();
   return (
     <div>
       <header className="no-print border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-          <span className="font-bold text-blue-800">{s.house_name || "Nhà trọ"}</span>
+          <HouseSwitcher houses={houses} currentId={house.id} />
           <nav className="flex flex-wrap items-center gap-1 text-sm">
             {MAIN.map((n) => (
               <Link key={n.href} href={n.href} className="rounded px-2 py-1 text-gray-700 hover:bg-gray-100">
