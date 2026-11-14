@@ -5,7 +5,7 @@ import { PrintButton } from "../../print-button";
 
 export const metadata = { title: "Hóa đơn tiền trọ", robots: { index: false, follow: false } };
 
-type Inv = { id: number; house_id: number; code: string; month: string; tenant_name: string; people: number; total: number; due_date: string };
+type Inv = { id: number; house_id: number; code: string; month: string; tenant_name: string; people: number; total: number; due_date: string; period_start: string | null };
 
 export default async function PayPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -45,7 +45,7 @@ export default async function PayPage({ params }: { params: Promise<{ token: str
         <dl className="space-y-1 text-sm">
           <Row k="Phòng" v={inv.code} bold />
           <Row k="Khách thuê" v={inv.tenant_name} />
-          <Row k="Kỳ thu" v={`Tháng ${monthLabel(inv.month)}`} />
+          <Row k="Kỳ thu" v={inv.period_start ? `${dateVN(inv.period_start)} - ${dateVN(inv.due_date)}` : `Tháng ${monthLabel(inv.month)}`} />
           <Row k="Hạn đóng" v={dateVN(inv.due_date)} />
         </dl>
 

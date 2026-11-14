@@ -3,9 +3,10 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { checkPassword, clearSession, requireAdmin, setSession } from "@/lib/auth";
-import { all, one, run } from "@/lib/db";
+import { all, batch, one, run } from "@/lib/db";
 import { currentHouse, setCurrentHouse } from "@/lib/house";
-import { generateInvoice } from "@/lib/billing";
+import { generateInvoice, generateMonth, saveInvoice } from "@/lib/billing";
+import { loadMonth } from "@/lib/monthdata";
 import { parseImport, runImport } from "@/lib/import-sheet";
 import { today } from "@/lib/format";
 
@@ -187,9 +188,7 @@ export async function saveAndGenerate(f: FormData) {
 export async function generateInvoices(f: FormData) {
   await requireAdmin();
   const m = month(f);
-  const rooms = await all<{ id: number }>("SELECT id FROM rooms WHERE house_id=? ORDER BY code", (await currentHouse()).id);
-  let n = 0;
-  for (const r of rooms) if (await generateInvoice(r.id, m)) n++;
+  const n = await generateMonth((await currentHouse()).id, m);
   refresh();
   back("/invoices", { month: m, ok: `Đã tạo/tính lại ${n} hóa đơn` });
 }
@@ -277,4 +276,145 @@ export async function deletePayment(f: FormData) {
   await run("DELETE FROM payments WHERE id=? AND invoice_id=?", num(f, "payment_id"), invId);
   refresh();
   back(`/invoices/${invId}`, { ok: "Đã xóa khoản thu" });
+}
+
+/* ---------- Bảng hóa đơn tháng (kiểu sheet): lưu một phòng ---------- */
+export type RoomMonthInput = {
+  roomId: number; month: string;
+  people: string; rent: string; periodStart: string; periodEnd: string;
+  elecOld: string; elecNew: string; waterOld: string; waterNew: string;
+  svc: Record<string, string>; extras: { name: string; amount: string }[];
+  discount: string; debt: string;
+};
+export type SaveResult =
+  | { ok: true; invoice: { id: number; token: string; total: number; paid: number; due: string; locked: boolean } | null }
+  | { ok: false; error: string };
+
+const toNum = (v: string | undefined) => {
+  const t = String(v ?? "").trim().replace(/\s/g, "");
+  if (t === "") return null;
+  const n = Number(t.replace(/,/g, "."));
+  return Number.isFinite(n) ? n : NaN;
+};
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Lưu số liệu một phòng trong một tháng rồi tính lại hóa đơn. Được gọi tự động khi chủ trọ sửa xong một ô. */
+export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
+  await requireAdmin();
+  try {
+    if (!MONTH_RE.test(inp.month)) return { ok: false, error: "Tháng không hợp lệ" };
+    const room = await one<{ house_id: number; id: number }>("SELECT id, house_id FROM rooms WHERE id=?", Number(inp.roomId));
+    if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+    const base = (await loadMonth(room.house_id, inp.month)).rooms.find((r) => r.id === room.id);
+    if (!base) return { ok: false, error: "Phòng chưa có khách thuê" };
+
+    const eo = toNum(inp.elecOld), en = toNum(inp.elecNew), wo = toNum(inp.waterOld), wn = toNum(inp.waterNew);
+    for (const [v, name] of [[eo, "điện cũ"], [en, "điện mới"], [wo, "nước cũ"], [wn, "nước mới"], [toNum(inp.people), "số người"], [toNum(inp.rent), "tiền phòng"], [toNum(inp.discount), "giảm giá"], [toNum(inp.debt), "nợ cũ"]] as const) {
+      if (v !== null && Number.isNaN(v)) return { ok: false, error: `Ô "${name}" phải là số` };
+    }
+    if (en !== null && en < (eo ?? 0)) return { ok: false, error: `Số điện mới (${en}) nhỏ hơn số cũ (${eo ?? 0})` };
+    if (wn !== null && wn < (wo ?? 0)) return { ok: false, error: `Số nước mới (${wn}) nhỏ hơn số cũ (${wo ?? 0})` };
+    for (const d of [inp.periodStart, inp.periodEnd]) if (d && !DATE_RE.test(d)) return { ok: false, error: "Kỳ hạn phải là ngày hợp lệ" };
+
+    const R = room.id, M = inp.month;
+    const st: { sql: string; args: (string | number | null)[] }[] = [];
+    // Số liệu tháng: chỉ lưu khi KHÁC giá trị tự động (để thay đổi sau này ở cài đặt còn có tác dụng)
+    const setMonth = (key: string, value: string | null, auto: string | null) => {
+      if (value === null || value === "" || value === auto) st.push({ sql: "DELETE FROM room_month WHERE room_id=? AND month=? AND key=?", args: [R, M, key] });
+      else st.push({ sql: "INSERT INTO room_month(room_id,month,key,value) VALUES (?,?,?,?) ON CONFLICT(room_id,month,key) DO UPDATE SET value=excluded.value", args: [R, M, key, value] });
+    };
+    const people = toNum(inp.people);
+    setMonth("people", people === null ? null : String(Math.max(1, Math.round(people))), String(base.tenantPeople));
+    const rent = toNum(inp.rent);
+    setMonth("rent", rent === null ? null : String(Math.max(0, Math.round(rent))), String(base.rent));
+    const debt = toNum(inp.debt);
+    setMonth("debt", debt === null ? null : String(Math.max(0, Math.round(debt))), String(base.auto.debt));
+    const discount = toNum(inp.discount);
+    setMonth("discount", discount === null || discount === 0 ? null : String(Math.abs(Math.round(discount))), null);
+    setMonth("p_start", inp.periodStart || null, base.auto.periodStart);
+    setMonth("p_end", inp.periodEnd || null, base.auto.periodEnd);
+    for (const [sid, v] of Object.entries(inp.svc ?? {})) {
+      if (!/^\d+$/.test(sid)) continue;
+      const n = toNum(v);
+      if (n !== null && Number.isNaN(n)) return { ok: false, error: "Ô dịch vụ phải là số" };
+      setMonth(`svc:${sid}`, n === null ? null : String(Math.round(n)), null);
+    }
+    // Phụ phí phát sinh của tháng: thay toàn bộ danh sách
+    st.push({ sql: "DELETE FROM extras WHERE room_id=? AND month=?", args: [R, M] });
+    for (const e of (inp.extras ?? []).slice(0, 30)) {
+      const name = String(e.name ?? "").trim().slice(0, 80);
+      const amount = toNum(e.amount);
+      if (amount !== null && Number.isNaN(amount)) return { ok: false, error: "Số tiền phụ phí phải là số" };
+      if (name && amount) st.push({ sql: "INSERT INTO extras(room_id,month,name,amount) VALUES (?,?,?,?)", args: [R, M, name, Math.round(amount)] });
+    }
+    // Chỉ số điện nước
+    if (en !== null || wn !== null) {
+      const eOld = eo ?? 0, wOld = wo ?? 0;
+      st.push({
+        sql: `INSERT INTO readings(room_id,month,elec_old,elec_new,water_old,water_new) VALUES (?,?,?,?,?,?)
+              ON CONFLICT(room_id,month) DO UPDATE SET elec_old=excluded.elec_old, elec_new=excluded.elec_new, water_old=excluded.water_old, water_new=excluded.water_new`,
+        args: [R, M, eOld, en ?? eOld, wOld, wn ?? wOld],
+      });
+    }
+    // Số người là số hiện tại của phòng: nếu đang sửa tháng mới nhất thì cập nhật luôn cho các tháng sau
+    if (people !== null) {
+      const latest = await one<{ m: string | null }>("SELECT MAX(month) m FROM invoices WHERE room_id=?", R);
+      if (!latest?.m || M >= latest.m) st.push({ sql: "UPDATE tenants SET people=? WHERE id=?", args: [Math.max(1, Math.round(people)), base.tenantId] });
+    }
+    await batch(st);
+
+    const fresh = (await loadMonth(room.house_id, M)).rooms.find((r) => r.id === R)!;
+    let invoice = fresh.invoice;
+    if (fresh.hasReading || fresh.invoice) {
+      await saveInvoice(fresh, M, { force: true });
+      const again = (await loadMonth(room.house_id, M)).rooms.find((r) => r.id === R)!;
+      invoice = again.invoice;
+    }
+    return { ok: true, invoice: invoice ? { id: invoice.id, token: invoice.token, total: invoice.total, paid: invoice.paid, due: invoice.due, locked: invoice.locked } : null };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Không lưu được" };
+  }
+}
+
+/* ---------- Ô "Sửa": thông tin cố định của phòng ---------- */
+export type RoomProfileInput = {
+  roomId: number; month: string;
+  code: string; tenantName: string; phone: string; people: string; rent: string; dueDay: string; note: string;
+  elecPrice: string; waterPrice: string;
+  svc: Record<string, { unit: string; off: boolean }>;
+};
+export async function saveRoomProfile(inp: RoomProfileInput): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  try {
+    const room = await one<{ id: number; house_id: number }>("SELECT id, house_id FROM rooms WHERE id=?", Number(inp.roomId));
+    if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+    const code = String(inp.code ?? "").trim().slice(0, 20);
+    if (!code) return { ok: false, error: "Nhập số phòng" };
+    if (await one("SELECT id FROM rooms WHERE house_id=? AND code=? AND id<>?", room.house_id, code, room.id)) return { ok: false, error: `Phòng ${code} đã có` };
+    const name = String(inp.tenantName ?? "").trim().slice(0, 80);
+    if (!name) return { ok: false, error: "Nhập tên khách" };
+    const n = (v: string) => { const x = toNum(v); return x === null || Number.isNaN(x) ? null : x; };
+    const st: { sql: string; args: (string | number | null)[] }[] = [];
+    st.push({ sql: "UPDATE rooms SET code=?, rent=?, due_day=?, note=? WHERE id=?", args: [code, Math.max(0, Math.round(n(inp.rent) ?? 0)), Math.min(31, Math.max(1, Math.round(n(inp.dueDay) ?? 15))), String(inp.note ?? "").slice(0, 200), room.id] });
+    st.push({ sql: "UPDATE tenants SET name=?, phone=?, people=? WHERE room_id=? AND active=1", args: [name, String(inp.phone ?? "").trim().slice(0, 30), Math.max(1, Math.round(n(inp.people) ?? 1)), room.id] });
+    const pref = (key: string, value: number | null) => {
+      if (value === null) st.push({ sql: "DELETE FROM room_prefs WHERE room_id=? AND key=?", args: [room.id, key] });
+      else st.push({ sql: "INSERT INTO room_prefs(room_id,key,value) VALUES (?,?,?) ON CONFLICT(room_id,key) DO UPDATE SET value=excluded.value", args: [room.id, key, String(Math.max(0, Math.round(value)))] });
+    };
+    pref("elec_price", n(inp.elecPrice));
+    pref("water_price", n(inp.waterPrice));
+    for (const [sid, v] of Object.entries(inp.svc ?? {})) {
+      if (!/^\d+$/.test(sid)) continue;
+      pref(`svc:${sid}`, n(v.unit));
+      if (v.off) st.push({ sql: "INSERT INTO room_prefs(room_id,key,value) VALUES (?,?,'1') ON CONFLICT(room_id,key) DO UPDATE SET value='1'", args: [room.id, `svc_off:${sid}`] });
+      else st.push({ sql: "DELETE FROM room_prefs WHERE room_id=? AND key=?", args: [room.id, `svc_off:${sid}`] });
+    }
+    await batch(st);
+    // Tính lại hóa đơn tháng đang xem (nếu đã có) theo thông tin mới
+    if (MONTH_RE.test(inp.month) && (await one("SELECT id FROM invoices WHERE room_id=? AND month=?", room.id, inp.month))) await generateInvoice(room.id, inp.month, { force: true });
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Không lưu được" };
+  }
 }

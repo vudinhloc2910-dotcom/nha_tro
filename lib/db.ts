@@ -76,6 +76,14 @@ const SCHEMA = `
     source TEXT NOT NULL DEFAULT 'manual'
   );
   CREATE INDEX IF NOT EXISTS ledger_house_month ON ledger(house_id, month);
+  CREATE TABLE IF NOT EXISTS room_prefs(
+    room_id INTEGER NOT NULL REFERENCES rooms(id), key TEXT NOT NULL, value TEXT NOT NULL,
+    PRIMARY KEY(room_id, key)
+  );
+  CREATE TABLE IF NOT EXISTS room_month(
+    room_id INTEGER NOT NULL REFERENCES rooms(id), month TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+    PRIMARY KEY(room_id, month, key)
+  );
   CREATE TABLE IF NOT EXISTS payments(
     id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     amount INTEGER NOT NULL, method TEXT DEFAULT 'bank', paid_at TEXT NOT NULL, note TEXT DEFAULT ''
@@ -116,6 +124,10 @@ async function init() {
   const cols = await c.execute("SELECT name FROM pragma_table_info('invoices')");
   if (!cols.rows.some((r) => r.name === "locked")) {
     await c.execute("ALTER TABLE invoices ADD COLUMN locked INTEGER NOT NULL DEFAULT 0");
+  }
+  // Kỳ hạn thuê của hóa đơn (ngày bắt đầu; ngày kết thúc chính là hạn đóng due_date)
+  if (!cols.rows.some((r) => r.name === "period_start")) {
+    await c.execute("ALTER TABLE invoices ADD COLUMN period_start TEXT");
   }
 
   // Nhiều nhà: tạo danh sách nhà (chạy lại không nhân đôi nhờ id cố định)
