@@ -502,3 +502,68 @@ export async function addRoomExtra(f: FormData) {
   refresh();
   back(dest, { ok: `Đã thêm khoản "${name}" vào hóa đơn tháng ${m.slice(5)}/${m.slice(0, 4)}`, tab: "history" });
 }
+
+/* ---------- Sổ thu chi của tháng (hiện dưới bảng Hóa đơn tháng) ---------- */
+const catOf = (name: string) => {
+  const k = name.toLowerCase();
+  return k.includes("lương") || k.includes("luong") ? "luong" : k.includes("đầu tư") || k.includes("dau tu") || k.includes("set up") ? "dau_tu" : "phat_sinh";
+};
+
+/** Thay toàn bộ bảng "Chi phí phát sinh" của tháng. */
+export async function saveExpenseItems(month: string, items: { name: string; qty: string; unit: string }[]): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const st: { sql: string; args: (string | number)[] }[] = [
+    { sql: "DELETE FROM ledger WHERE house_id=? AND month=? AND kind='chi' AND category IN ('phat_sinh','luong','dau_tu')", args: [h.id, month] },
+  ];
+  for (const it of (items ?? []).slice(0, 60)) {
+    const name = String(it.name ?? "").trim().slice(0, 120);
+    const qty = toNum(it.qty) ?? 1, unit = toNum(it.unit);
+    if (!name || unit === null || Number.isNaN(unit) || Number.isNaN(qty)) continue;
+    const amount = Math.round(qty * unit);
+    if (!amount) continue;
+    st.push({ sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta) VALUES (?,?,'chi',?,?,?,'manual',?)", args: [h.id, month, catOf(name), name, amount, JSON.stringify({ qty, unit })] });
+  }
+  await batch(st);
+  return { ok: true };
+}
+
+/** Thay toàn bộ bảng "Thu tiền phòng mới" của tháng (cọc, tháng đầu của khách mới). */
+export async function saveNewRooms(month: string, rows: { room: string; rent: string; people: string; phone: string; total: string; note: string }[]): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const st: { sql: string; args: (string | number)[] }[] = [
+    { sql: "DELETE FROM ledger WHERE house_id=? AND month=? AND kind='thu' AND category='phong_moi'", args: [h.id, month] },
+  ];
+  for (const r of (rows ?? []).slice(0, 30)) {
+    const room = String(r.room ?? "").trim().slice(0, 20);
+    const total = toNum(r.total);
+    if (!room || total === null || Number.isNaN(total) || !total) continue;
+    st.push({
+      sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta) VALUES (?,?,'thu','phong_moi',?,?,'manual',?)",
+      args: [h.id, month, `Phòng ${room}`, Math.round(total), JSON.stringify({ room, rent: toNum(r.rent) ?? 0, people: toNum(r.people) ?? 1, phone: String(r.phone ?? "").slice(0, 20), note: String(r.note ?? "").slice(0, 60) })],
+    });
+  }
+  await batch(st);
+  return { ok: true };
+}
+
+/** Lưu số tiền chi thực tế từng khoản (điện, nước, mạng, dịch vụ, tiền thuê nhà) của tháng. */
+export async function saveChiCategories(month: string, chi: Partial<Record<"dien" | "nuoc" | "mang" | "dich_vu" | "tien_phong", string>>): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const names = { dien: "Tiền điện (trả nhà cung cấp)", nuoc: "Tiền nước (trả nhà cung cấp)", mang: "Tiền mạng", dich_vu: "Dịch vụ (chi thực tế)", tien_phong: "Tiền thuê nhà (trả chủ nhà)" } as const;
+  const st: { sql: string; args: (string | number)[] }[] = [];
+  for (const k of Object.keys(names) as (keyof typeof names)[]) {
+    if (chi[k] === undefined) continue;
+    const n = toNum(chi[k]);
+    if (n !== null && Number.isNaN(n)) return { ok: false, error: "Số tiền chi phải là số" };
+    st.push({ sql: "DELETE FROM ledger WHERE house_id=? AND month=? AND kind='chi' AND category=?", args: [h.id, month, k] });
+    if (n && n > 0) st.push({ sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source) VALUES (?,?,'chi',?,?,?,'manual')", args: [h.id, month, k, names[k], Math.round(n)] });
+  }
+  await batch(st);
+  return { ok: true };
+}

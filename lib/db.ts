@@ -84,6 +84,15 @@ const SCHEMA = `
     room_id INTEGER NOT NULL REFERENCES rooms(id), month TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
     PRIMARY KEY(room_id, month, key)
   );
+  CREATE TABLE IF NOT EXISTS vehicles(
+    id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL REFERENCES rooms(id),
+    kind TEXT NOT NULL DEFAULT 'Xe máy', plate TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS activity(
+    id INTEGER PRIMARY KEY, house_id INTEGER NOT NULL, room_id INTEGER, kind TEXT NOT NULL,
+    text TEXT NOT NULL, ts TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS activity_ts ON activity(ts);
   CREATE TABLE IF NOT EXISTS payments(
     id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     amount INTEGER NOT NULL, method TEXT DEFAULT 'bank', paid_at TEXT NOT NULL, note TEXT DEFAULT ''
@@ -124,6 +133,14 @@ async function init() {
   const cols = await c.execute("SELECT name FROM pragma_table_info('invoices')");
   if (!cols.rows.some((r) => r.name === "locked")) {
     await c.execute("ALTER TABLE invoices ADD COLUMN locked INTEGER NOT NULL DEFAULT 0");
+  }
+  // Sổ thu chi: cột meta lưu thêm chi tiết (số lượng, đơn giá, phòng mới...)
+  const lcols = await c.execute("SELECT name FROM pragma_table_info('ledger')");
+  if (!lcols.rows.some((r) => r.name === "meta")) await c.execute("ALTER TABLE ledger ADD COLUMN meta TEXT NOT NULL DEFAULT ''");
+  // Hợp đồng và tạm trú của khách thuê
+  const tcols = await c.execute("SELECT name FROM pragma_table_info('tenants')");
+  for (const [col, ddl] of [["contract_end", "TEXT DEFAULT ''"], ["residence_done", "INTEGER NOT NULL DEFAULT 0"]] as const) {
+    if (!tcols.rows.some((r) => r.name === col)) await c.execute(`ALTER TABLE tenants ADD COLUMN ${col} ${ddl}`);
   }
   // Kỳ hạn thuê của hóa đơn (ngày bắt đầu; ngày kết thúc chính là hạn đóng due_date)
   if (!cols.rows.some((r) => r.name === "period_start")) {

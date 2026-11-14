@@ -10,7 +10,7 @@ export type RoomView = {
   input: RoomInput;
   /** Giá trị tự động (để hiện làm gợi ý khi chủ trọ chưa đặt tay) */
   auto: { debt: number; periodStart: string; periodEnd: string };
-  invoice: { id: number; token: string; total: number; paid: number; locked: boolean; due: string } | null;
+  invoice: { id: number; token: string; total: number; paid: number; locked: boolean; due: string; lines: { label: string; detail: string; amount: number }[] } | null;
   prevUsage: { e: number; w: number } | null;
   hasReading: boolean;
 };
@@ -52,6 +52,10 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
        COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
      FROM invoices i WHERE i.month=? AND i.room_id IN (${ids})`, month
   );
+  const invLines = invoices.length
+    ? await all<{ invoice_id: number; label: string; detail: string; amount: number }>(
+        `SELECT invoice_id, label, detail, amount FROM invoice_lines WHERE invoice_id IN (${invoices.map((i) => Number(i.id)).join(",")}) ORDER BY id`)
+    : [];
   const prevInv = await all<{ room_id: number; total: number; due_date: string; paid: number }>(
     `SELECT i.room_id, i.total, i.due_date, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
      FROM invoices i WHERE i.room_id IN (${ids}) AND i.month=(SELECT MAX(month) FROM invoices WHERE room_id=i.room_id AND month<?)`, month
@@ -104,7 +108,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       tenantId: Number(r.tid), tenantName: r.tname ?? "", phone: r.phone ?? "", tenantPeople: r.people ?? 1,
       prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), svc: svcPrefs },
       input, auto: { debt: debtAuto, periodStart: autoStart, periodEnd: autoEnd },
-      invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: inv.due_date } : null,
+      invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: inv.due_date, lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
       prevUsage: prev ? { e: Math.max(0, prev.elec_new - prev.elec_old), w: Math.max(0, prev.water_new - prev.water_old) } : null,
       hasReading: !!cur,
     });
