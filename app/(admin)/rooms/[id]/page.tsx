@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import { all, one } from "@/lib/db";
 import { currentMonth, dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
 import { loadMonth } from "@/lib/monthdata";
-import { addRoomExtra, checkoutTenant, saveRoom, saveTenant } from "../../../actions";
+import { addRoomExtra, addVehicle, checkoutTenant, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
 import { Flash, StatusBadge } from "../../../components";
 import { RoomEditButton } from "../../../room-editor";
 import { accent, btnCls, btnDangerCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
 
 type Room = { id: number; house_id: number; code: string; rent: number; due_day: number; note: string };
-type Tenant = { name: string; phone: string; people: number; move_in: string; deposit: number };
+type Tenant = { name: string; phone: string; people: number; move_in: string; deposit: number; contract_end: string | null; residence_done: number };
+type Vehicle = { id: number; kind: string; plate: string; note: string };
 type Inv = { id: number; month: string; total: number; due_date: string; locked: number; paid: number };
 type Rd = { month: string; elec_old: number; elec_new: number; water_old: number; water_new: number };
 
@@ -31,6 +32,7 @@ export default async function RoomPage({
     `SELECT i.id, i.month, i.total, i.due_date, i.locked, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
      FROM invoices i WHERE i.room_id=? ORDER BY i.month DESC`, room.id
   );
+  const vehicles = await all<Vehicle>("SELECT id, kind, plate, note FROM vehicles WHERE room_id=? ORDER BY id", room.id);
   const debt = invoices.reduce((a, i) => a + Math.max(0, i.total - i.paid), 0);
   const month = currentMonth();
   const md = await loadMonth(room.house_id, month);
@@ -83,6 +85,8 @@ export default async function RoomPage({
               <div><label className={labelCls}>Số người ở</label><input name="people" type="number" min="1" defaultValue={t?.people ?? 1} className={inputCls} /></div>
               <div><label className={labelCls}>Ngày vào</label><input name="move_in" type="date" defaultValue={t?.move_in ?? ""} className={inputCls} /></div>
               <div><label className={labelCls}>Tiền cọc (đ)</label><input name="deposit" type="number" min="0" defaultValue={t?.deposit ?? 0} className={inputCls} /></div>
+              <div><label className={labelCls}>Hợp đồng đến ngày</label><input name="contract_end" type="date" defaultValue={t?.contract_end ?? ""} className={inputCls} /></div>
+              <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" name="residence_done" defaultChecked={!!t?.residence_done} />Đã khai tạm trú</label>
               <div className="flex items-end"><button className={btnCls}>{t ? "Lưu khách" : "Thêm khách"}</button></div>
             </form>
             {t && (
@@ -93,6 +97,29 @@ export default async function RoomPage({
               </form>
             )}
           </section>
+
+          {t && (
+            <section className={cardCls}>
+              <h2 className="mb-2 font-semibold">Phương tiện của phòng</h2>
+              {vehicles.length === 0 ? <p className="mb-3 text-sm text-gray-500">Chưa ghi phương tiện nào.</p> : (
+                <ul className="mb-3 divide-y divide-gray-100 text-sm">
+                  {vehicles.map((v) => (
+                    <li key={v.id} className="flex items-center justify-between gap-2 py-2">
+                      <span><b>{v.kind}</b>{v.plate ? ` · ${v.plate}` : ""}{v.note ? <span className="text-gray-500"> · {v.note}</span> : null}</span>
+                      <form action={deleteVehicle}><input type="hidden" name="room_id" value={room.id} /><input type="hidden" name="id" value={v.id} /><button className={btnDangerCls}>Xóa</button></form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form action={addVehicle} className="grid gap-3 sm:grid-cols-5">
+                <input type="hidden" name="room_id" value={room.id} />
+                <div><label className={labelCls}>Loại xe</label><select name="kind" className={inputCls}><option>Xe máy</option><option>Xe điện</option><option>Xe đạp</option><option>Ô tô</option></select></div>
+                <div><label className={labelCls}>Biển số</label><input name="plate" className={inputCls} placeholder="29A1-123.45" /></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Ghi chú</label><input name="note" className={inputCls} placeholder="VD: có sạc điện" /></div>
+                <div className="flex items-end"><button className={btnCls}>Thêm xe</button></div>
+              </form>
+            </section>
+          )}
 
           {past.length > 0 && (
             <section className={cardCls}>

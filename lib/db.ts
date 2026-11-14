@@ -93,6 +93,11 @@ const SCHEMA = `
     text TEXT NOT NULL, ts TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS activity_ts ON activity(ts);
+  CREATE TABLE IF NOT EXISTS issues(
+    id INTEGER PRIMARY KEY, house_id INTEGER NOT NULL, room_id INTEGER, title TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open', source TEXT NOT NULL DEFAULT 'owner', cost INTEGER NOT NULL DEFAULT 0,
+    created TEXT NOT NULL, resolved TEXT
+  );
   CREATE TABLE IF NOT EXISTS payments(
     id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     amount INTEGER NOT NULL, method TEXT DEFAULT 'bank', paid_at TEXT NOT NULL, note TEXT DEFAULT ''

@@ -7,6 +7,7 @@ import { all, batch, one, run } from "@/lib/db";
 import { currentHouse, setCurrentHouse } from "@/lib/house";
 import { generateInvoice, generateMonth, saveInvoice } from "@/lib/billing";
 import { loadMonth } from "@/lib/monthdata";
+import { logActivity } from "@/lib/activity";
 import { parseImport, runImport } from "@/lib/import-sheet";
 import { today } from "@/lib/format";
 
@@ -82,17 +83,24 @@ export async function saveTenant(f: FormData) {
   const roomId = num(f, "room_id");
   const name = str(f, "name");
   if (!name) back(`/rooms/${roomId}`, { err: "Nhập tên khách" });
-  const vals = [name, str(f, "phone"), Math.max(1, num(f, "people") || 1), str(f, "move_in"), Math.max(0, num(f, "deposit"))] as const;
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(str(f, "contract_end")) ? str(f, "contract_end") : "";
+  const vals = [name, str(f, "phone"), Math.max(1, num(f, "people") || 1), str(f, "move_in"), Math.max(0, num(f, "deposit")), end, f.get("residence_done") ? 1 : 0] as const;
   const cur = await one<{ id: number }>("SELECT id FROM tenants WHERE room_id=? AND active=1", roomId);
-  if (cur) await run("UPDATE tenants SET name=?, phone=?, people=?, move_in=?, deposit=? WHERE id=?", ...vals, cur.id);
-  else await run("INSERT INTO tenants(name, phone, people, move_in, deposit, room_id) VALUES (?,?,?,?,?,?)", ...vals, roomId);
+  const rinfo = await one<{ house_id: number; code: string }>("SELECT house_id, code FROM rooms WHERE id=?", roomId);
+  if (cur) await run("UPDATE tenants SET name=?, phone=?, people=?, move_in=?, deposit=?, contract_end=?, residence_done=? WHERE id=?", ...vals, cur.id);
+  else {
+    await run("INSERT INTO tenants(name, phone, people, move_in, deposit, contract_end, residence_done, room_id) VALUES (?,?,?,?,?,?,?,?)", ...vals, roomId);
+    if (rinfo) await logActivity(rinfo.house_id, "checkin", `Phòng ${rinfo.code}: khách mới ${name} vào ở`, roomId);
+  }
   refresh();
   back(`/rooms/${roomId}`, { ok: "Đã lưu khách thuê" });
 }
 export async function checkoutTenant(f: FormData) {
   await requireAdmin();
   const roomId = num(f, "room_id");
+  const rinfo = await one<{ house_id: number; code: string }>("SELECT house_id, code FROM rooms WHERE id=?", roomId);
   await run("UPDATE tenants SET active=0, move_out=? WHERE room_id=? AND active=1", today(), roomId);
+  if (rinfo) await logActivity(rinfo.house_id, "checkout", `Phòng ${rinfo.code}: khách trả phòng`, roomId);
   refresh();
   back(`/rooms/${roomId}`, { ok: "Đã trả phòng" });
 }
@@ -267,6 +275,8 @@ export async function addPayment(f: FormData) {
   if (amount <= 0) back(`/invoices/${invId}`, { err: "Số tiền thu phải lớn hơn 0" });
   const method = str(f, "method") === "cash" ? "cash" : "bank";
   await run("INSERT INTO payments(invoice_id,amount,method,paid_at,note) VALUES (?,?,?,?,?)", invId, amount, method, str(f, "paid_at") || today(), str(f, "note"));
+  const pinfo = await one<{ house_id: number; code: string; room_id: number; month: string }>("SELECT r.house_id, r.code, r.id room_id, i.month FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.id=?", invId);
+  if (pinfo) await logActivity(pinfo.house_id, "payment", `Phòng ${pinfo.code} đã đóng ${amount.toLocaleString("vi-VN")}đ (hóa đơn T${pinfo.month.slice(5)})`, pinfo.room_id);
   refresh();
   back(`/invoices/${invId}`, { ok: "Đã ghi nhận thu tiền" });
 }
@@ -566,4 +576,114 @@ export async function saveChiCategories(month: string, chi: Partial<Record<"dien
   }
   await batch(st);
   return { ok: true };
+}
+
+/* ---------- Nhắc nợ, tạm trú, phương tiện ---------- */
+/** Ghi nhật ký khi chủ trọ bấm "Nhắc nợ" (mở Zalo của khách). */
+export async function logRemind(roomId: number): Promise<void> {
+  await requireAdmin();
+  const r = await one<{ house_id: number; code: string }>("SELECT house_id, code FROM rooms WHERE id=?", Number(roomId));
+  if (r) await logActivity(r.house_id, "remind", `Đã nhắc nợ phòng ${r.code} qua Zalo`, Number(roomId));
+}
+
+export async function toggleResidence(f: FormData) {
+  await requireAdmin();
+  const id = num(f, "room_id");
+  await run("UPDATE tenants SET residence_done=? WHERE room_id=? AND active=1", f.get("done") === "1" ? 1 : 0, id);
+  refresh();
+  back(str(f, "back").startsWith("/") ? str(f, "back") : "/tenants", {});
+}
+
+export async function addVehicle(f: FormData) {
+  await requireAdmin();
+  const roomId = num(f, "room_id");
+  const plate = str(f, "plate").toUpperCase().slice(0, 20);
+  const kind = ["Xe máy", "Xe điện", "Xe đạp", "Ô tô"].includes(str(f, "kind")) ? str(f, "kind") : "Xe máy";
+  await run("INSERT INTO vehicles(room_id, kind, plate, note) VALUES (?,?,?,?)", roomId, kind, plate, str(f, "note").slice(0, 80));
+  refresh();
+  back(`/rooms/${roomId}`, { ok: "Đã thêm phương tiện" });
+}
+export async function deleteVehicle(f: FormData) {
+  await requireAdmin();
+  const roomId = num(f, "room_id");
+  await run("DELETE FROM vehicles WHERE id=? AND room_id=?", num(f, "id"), roomId);
+  refresh();
+  back(`/rooms/${roomId}`, { ok: "Đã xóa phương tiện" });
+}
+
+/* ---------- Sự cố và bảo trì ---------- */
+export async function addIssue(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  const title = str(f, "title").slice(0, 120);
+  if (!title) back("/issues", { err: "Nhập nội dung sự cố" });
+  const roomId = num(f, "room_id") || null;
+  if (roomId && !(await one("SELECT id FROM rooms WHERE id=? AND house_id=?", roomId, house.id))) back("/issues", { err: "Phòng không thuộc nhà này" });
+  await run("INSERT INTO issues(house_id, room_id, title, detail, source, created) VALUES (?,?,?,?,'owner',?)", house.id, roomId, title, str(f, "detail").slice(0, 500), new Date().toISOString());
+  await logActivity(house.id, "issue", `Sự cố mới: ${title}`, roomId);
+  refresh();
+  back("/issues", { ok: "Đã ghi sự cố" });
+}
+export async function setIssueStatus(f: FormData) {
+  await requireAdmin();
+  const id = num(f, "id");
+  const status = ["open", "doing", "done"].includes(str(f, "status")) ? str(f, "status") : "open";
+  const cost = Math.max(0, Math.round(num(f, "cost")));
+  const it = await one<{ house_id: number; title: string; room_id: number | null; cost: number; status: string }>("SELECT house_id, title, room_id, cost, status FROM issues WHERE id=?", id);
+  if (!it) back("/issues", { err: "Không tìm thấy sự cố" });
+  await run("UPDATE issues SET status=?, cost=?, resolved=? WHERE id=?", status, status === "done" ? cost : it!.cost, status === "done" ? new Date().toISOString() : null, id);
+  // Xong và có chi phí: ghi luôn vào chi phí phát sinh của tháng này
+  if (status === "done" && cost > 0 && it!.status !== "done") {
+    const m = today().slice(0, 7);
+    await run("INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta) VALUES (?,?,'chi','phat_sinh',?,?,'manual',?)", it!.house_id, m, `Sửa chữa: ${it!.title}`.slice(0, 120), cost, JSON.stringify({ qty: 1, unit: cost }));
+    await logActivity(it!.house_id, "expense", `Chi ${cost.toLocaleString("vi-VN")}đ cho: ${it!.title}`, it!.room_id);
+  }
+  refresh();
+  back("/issues", { ok: status === "done" ? "Đã đánh dấu xong" : "Đã cập nhật" });
+}
+export async function deleteIssue(f: FormData) {
+  await requireAdmin();
+  await run("DELETE FROM issues WHERE id=?", num(f, "id"));
+  refresh();
+  back("/issues", { ok: "Đã xóa" });
+}
+
+/** Khách báo sự cố từ trang hóa đơn (không cần đăng nhập, dùng link hóa đơn của chính mình). */
+export async function reportIssue(f: FormData) {
+  const token = str(f, "token");
+  if (!/^[0-9a-f]{24}$/.test(token)) redirect("/login");
+  const inv = await one<{ room_id: number; house_id: number; code: string }>("SELECT i.room_id, r.house_id, r.code FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.token=?", token);
+  if (!inv) redirect("/login");
+  const title = str(f, "title").slice(0, 120);
+  const back2 = (p: Record<string, string>) => redirect(`/pay/${token}?${new URLSearchParams(p).toString()}#bao-su-co`);
+  if (title.length < 3) back2({ issue: "short" });
+  const since = new Date(Date.now() - 86400000).toISOString();
+  const n = Number((await one<{ c: number }>("SELECT COUNT(*) c FROM issues WHERE room_id=? AND source='tenant' AND created>?", inv!.room_id, since))?.c ?? 0);
+  if (n >= 5) back2({ issue: "limit" });
+  await run("INSERT INTO issues(house_id, room_id, title, detail, source, created) VALUES (?,?,?,?,'tenant',?)", inv!.house_id, inv!.room_id, title, str(f, "detail").slice(0, 500), new Date().toISOString());
+  await logActivity(inv!.house_id, "issue", `Phòng ${inv!.code} báo sự cố: ${title}`, inv!.room_id);
+  back2({ issue: "ok" });
+}
+
+/* ---------- Thu chi tự ghi (sổ thu chi) ---------- */
+export async function addLedgerEntry(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  const m = str(f, "month");
+  const name = str(f, "name").slice(0, 120);
+  const amount = Math.round(num(f, "amount"));
+  const kind = str(f, "kind") === "thu" ? "thu" : "chi";
+  const category = ["dien", "nuoc", "mang", "dich_vu", "tien_phong", "phat_sinh", "luong", "dau_tu", "phong_moi"].includes(str(f, "category")) ? str(f, "category") : "phat_sinh";
+  if (!MONTH_RE.test(m) || !name || !amount) back("/ledger", { err: "Nhập tháng, nội dung và số tiền" });
+  await run("INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta) VALUES (?,?,?,?,?,?,'manual',?)", house.id, m, kind, category, name, Math.abs(amount), JSON.stringify({ qty: 1, unit: Math.abs(amount) }));
+  if (kind === "chi") await logActivity(house.id, "expense", `Chi ${Math.abs(amount).toLocaleString("vi-VN")}đ: ${name}`);
+  refresh();
+  back("/ledger", { ok: "Đã ghi", year: m.slice(0, 4) });
+}
+export async function deleteLedgerEntry(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  await run("DELETE FROM ledger WHERE id=? AND house_id=?", num(f, "id"), house.id);
+  refresh();
+  back("/ledger", { ok: "Đã xóa", year: str(f, "year") });
 }

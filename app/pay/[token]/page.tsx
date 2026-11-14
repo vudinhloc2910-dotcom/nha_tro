@@ -2,13 +2,15 @@ import { notFound } from "next/navigation";
 import { all, getSettings, one } from "@/lib/db";
 import { dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
 import { PrintButton } from "../../print-button";
+import { reportIssue } from "../../actions";
 
 export const metadata = { title: "Hóa đơn tiền trọ", robots: { index: false, follow: false } };
 
 type Inv = { id: number; house_id: number; code: string; month: string; tenant_name: string; people: number; total: number; due_date: string; period_start: string | null };
 
-export default async function PayPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PayPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ issue?: string }> }) {
   const { token } = await params;
+  const sp = await searchParams;
   if (!/^[0-9a-f]{24}$/.test(token)) notFound();
   const inv = await one<Inv>("SELECT i.*, r.code, r.house_id FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.token=?", token);
   if (!inv) notFound();
@@ -104,6 +106,18 @@ export default async function PayPage({ params }: { params: Promise<{ token: str
         <p className="text-center text-xs text-gray-500">Cảm ơn quý khách! Mọi thắc mắc xin liên hệ chủ trọ{s.house_phone ? `: ${s.house_phone}` : ""}.</p>
       </div>
       <div className="no-print mt-4 text-center"><PrintButton label="In hóa đơn / Lưu PDF" /></div>
+      <details id="bao-su-co" open={!!sp.issue} className="no-print mt-4 rounded-xl bg-white p-4 text-sm shadow-md">
+        <summary className="cursor-pointer font-semibold text-gray-800">Báo sự cố trong phòng</summary>
+        {sp.issue === "ok" && <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-green-800">Đã gửi cho chủ trọ. Cảm ơn quý khách!</p>}
+        {sp.issue === "short" && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-red-800">Vui lòng mô tả sự cố (ít nhất 3 ký tự).</p>}
+        {sp.issue === "limit" && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-red-800">Hôm nay quý khách đã báo nhiều lần. Vui lòng gọi trực tiếp cho chủ trọ.</p>}
+        <form action={reportIssue} className="mt-3 space-y-2">
+          <input type="hidden" name="token" value={token} />
+          <input name="title" required maxLength={120} placeholder="VD: Điều hòa không mát" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <textarea name="detail" maxLength={500} rows={3} placeholder="Mô tả thêm (không bắt buộc)" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <button className="w-full rounded-md bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700">Gửi cho chủ trọ</button>
+        </form>
+      </details>
     </main>
   );
 }

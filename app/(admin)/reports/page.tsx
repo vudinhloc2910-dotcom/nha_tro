@@ -45,6 +45,34 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <Card c="teal" label="Tỷ lệ đã thu" value={billed ? `${Math.round((paid / billed) * 100)}%` : "-"} />
           </div>
 
+          <section className={cardCls}>
+            <h2 className="mb-3 font-semibold">Thu, chi, lãi {year}</h2>
+            {months.length === 0 ? <p className="text-sm text-gray-500">Chưa có số liệu.</p> : (() => {
+              const top = Math.max(1, ...months.map((m) => Math.max(m.revenue, m.total_cost, Math.abs(m.profit))));
+              return (
+                <>
+                  <div className="flex h-44 items-end gap-2 overflow-x-auto pb-1">
+                    {months.map((m) => (
+                      <div key={m.month} className="flex min-w-[2.6rem] flex-1 flex-col items-center justify-end gap-1" title={`T${m.month.slice(5)}: thu ${vnd(m.revenue)}, chi ${vnd(m.total_cost)}, lãi ${vnd(m.profit)}`}>
+                        <div className="flex h-36 items-end gap-0.5">
+                          <div className="w-2.5 rounded-t bg-sky-400" style={{ height: `${Math.max(2, (m.revenue / top) * 136)}px` }} />
+                          <div className="w-2.5 rounded-t bg-amber-400" style={{ height: `${Math.max(2, (m.total_cost / top) * 136)}px` }} />
+                          <div className={`w-2.5 rounded-t ${m.profit < 0 ? "bg-rose-400" : "bg-teal-400"}`} style={{ height: `${Math.max(2, (Math.abs(m.profit) / top) * 136)}px` }} />
+                        </div>
+                        <span className="text-[10px] text-gray-500">T{m.month.slice(5)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-gray-600">
+                    <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-sky-400" />Doanh thu</span>
+                    <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" />Chi</span>
+                    <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-teal-400" />Lãi</span>
+                  </div>
+                </>
+              );
+            })()}
+          </section>
+
           {partners.length > 0 && (
             <section className={cardCls}>
               <h2 className="mb-2 font-semibold">Chia lãi năm {year}</h2>

@@ -275,7 +275,7 @@ export function MonthGrid({ month, houseName, waterMode, services, rooms, vacant
               <div className={`mt-2 text-xs ${stt?.state === "error" ? "font-medium text-red-700" : stt?.state === "saving" ? "text-gray-500" : "text-green-700"}`}>{stt?.msg ?? (inv ? "" : "Chưa có hóa đơn: nhập số điện mới")}</div>
               {inv && !dirty(r) && (
                 <div className="mt-1 flex flex-wrap gap-2">
-                  <CopyButton path={path} message={msg} label="Chép tin nhắn" primary />
+                  <CopyButton path={path} message={msg} label={r.phone ? "Chép tin & mở Zalo" : "Chép tin nhắn"} primary zaloPhone={r.phone} />
                   <CopyButton path={path} label="Chép link" />
                   <Link href={path} target="_blank" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800">Xem hóa đơn</Link>
                   <Link href={`/invoices/${inv.id}`} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800">Thu tiền</Link>
@@ -436,7 +436,7 @@ export function MonthGrid({ month, houseName, waterMode, services, rooms, vacant
                     <div className={`mb-1 text-[11px] ${st?.state === "error" ? "font-medium text-red-700" : st?.state === "saving" ? "text-gray-500" : "text-green-700"}`}>{st?.msg ?? (inv ? "" : "Chưa có hóa đơn: nhập số điện mới")}</div>
                     {inv && !dirty(r) ? (
                       <div className="flex flex-wrap gap-1">
-                        <CopyButton path={path} message={msg} label="Chép tin nhắn" primary />
+                        <CopyButton path={path} message={msg} label={r.phone ? "Chép tin & mở Zalo" : "Chép tin nhắn"} primary zaloPhone={r.phone} />
                         <CopyButton path={path} label="Chép link" />
                         <Link href={path} target="_blank" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50">Xem hóa đơn</Link>
                         <Link href={`/invoices/${inv.id}`} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50">Thu tiền</Link>

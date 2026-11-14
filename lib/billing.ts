@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { one, run, batch } from "./db";
 import { computeInvoice } from "./calc";
 import { loadMonth, type RoomView } from "./monthdata";
+import { logActivity } from "./activity";
 
 /** Ghi hóa đơn của một phòng (tạo mới hoặc tính lại). Giữ nguyên id, link khách và các lần thanh toán. */
 export async function saveInvoice(view: RoomView, month: string, opts: { force?: boolean } = {}): Promise<number> {
@@ -16,6 +17,8 @@ export async function saveInvoice(view: RoomView, month: string, opts: { force?:
       view.id, month, view.tenantName, i.people, i.debt, total, i.periodEnd, i.periodStart, crypto.randomBytes(12).toString("hex")
     );
     id = r.lastInsertRowid;
+    const hr = await one<{ house_id: number }>("SELECT house_id FROM rooms WHERE id=?", view.id);
+    if (hr) await logActivity(hr.house_id, "invoice", `Tạo hóa đơn T${month.slice(5)} phòng ${view.code}: ${total.toLocaleString("vi-VN")}đ`, view.id);
   }
   await batch([
     { sql: "UPDATE invoices SET tenant_name=?, people=?, prev_debt=?, total=?, due_date=?, period_start=?, locked=0 WHERE id=?", args: [view.tenantName, i.people, i.debt, total, i.periodEnd, i.periodStart, id] },

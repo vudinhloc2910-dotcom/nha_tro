@@ -13,9 +13,12 @@ const MAIN = [
   { href: "/history", label: "Lịch sử thu" },
   { href: "/reports", label: "Báo cáo" },
   { href: "/rooms", label: "Phòng" },
+  { href: "/tenants", label: "Khách thuê" },
   { href: "/settings", label: "Cài đặt" },
 ];
 const MORE = [
+  { href: "/issues", label: "Sự cố và bảo trì" },
+  { href: "/ledger", label: "Sổ thu chi" },
   { href: "/invoices", label: "Danh sách hóa đơn" },
   { href: "/readings", label: "Bảng điện nước" },
   { href: "/import", label: "Nhập dữ liệu sheet" },

@@ -22,6 +22,9 @@ const TABS = [
   { href: "/reports", label: "Báo cáo", icon: ICON.chart, on: "text-violet-600", dot: "bg-violet-500" },
 ];
 const MORE = [
+  { href: "/tenants", label: "Khách thuê" },
+  { href: "/issues", label: "Sự cố và bảo trì" },
+  { href: "/ledger", label: "Sổ thu chi" },
   { href: "/history", label: "Lịch sử thu tiền" },
   { href: "/invoices", label: "Danh sách hóa đơn" },
   { href: "/readings", label: "Bảng điện nước" },
