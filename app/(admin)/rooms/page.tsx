@@ -26,7 +26,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
           <tbody className="divide-y divide-gray-100">
             {rooms.map((r) => (
               <tr key={r.id}>
-                <td className={tdCls}><Link className="font-medium text-blue-700 hover:underline" href={`/rooms/${r.id}`}>{r.code}</Link></td>
+                <td className={tdCls}><Link className="font-medium text-brand-700 hover:underline" href={`/rooms/${r.id}`}>{r.code}</Link></td>
                 <td className={tdCls}>{r.name ?? <span className="text-gray-500">Trống</span>}</td>
                 <td className={tdCls}>{r.people ?? "-"}</td>
                 <td className={`${tdCls} text-right`}>{vnd(r.rent)}</td>

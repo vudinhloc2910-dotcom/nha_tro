@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* Bảng màu của app: xanh dương nhạt + vài màu phụ (ngọc, tím, cam) cho các thanh. Đổi ở đây là đổi cả app. */
+@theme {
+  --color-brand-50: #eff7ff;
+  --color-brand-100: #dcecfd;
+  --color-brand-200: #bcdcfb;
+  --color-brand-300: #8ec3f7;
+  --color-brand-400: #5aa6f0;
+  --color-brand-500: #3b8ae6;
+  --color-brand-600: #2b72cf;
+  --color-brand-700: #235cab;
+  --color-brand-800: #1f4a87;
+  --color-brand-900: #1b3d6e;
+  --color-cream: #f2f7fc;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+/* Chống phóng to khi chạm vào ô nhập trên iPhone */
+input, select, textarea { font-size: 16px; }
+@media (min-width: 768px) { input, select, textarea { font-size: 14px; } }
+
 @media print {
   .no-print { display: none !important; }
   body { background: #fff !important; }

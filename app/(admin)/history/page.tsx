@@ -2,7 +2,7 @@ import Link from "next/link";
 import { all } from "@/lib/db";
 import { currentHouse } from "@/lib/house";
 import { currentMonth, vnd } from "@/lib/format";
-import { cardCls, tdCls, thCls } from "@/lib/ui";
+import { accent, cardCls, tdCls, thCls } from "@/lib/ui";
 
 type Row = { month: string; n: number; total: number; paid: number; fully: number };
 
@@ -35,15 +35,15 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         </div>
         <div className="flex gap-2">
           {[2025, 2026, 2027].map((y) => (
-            <Link key={y} href={`/history?year=${y}`} className={`rounded-md border px-3 py-1.5 text-sm ${y === year ? "border-blue-700 bg-blue-700 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{y}</Link>
+            <Link key={y} href={`/history?year=${y}`} className={`rounded-md border px-3 py-1.5 text-sm ${y === year ? "border-brand-700 bg-brand-700 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{y}</Link>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <div className={cardCls}><div className="text-xs text-gray-500">Phải thu cả năm</div><div className="mt-1 text-base font-bold sm:text-lg">{vnd(sum.total)}</div></div>
-        <div className={cardCls}><div className="text-xs text-gray-500">Đã thu</div><div className="mt-1 text-base font-bold text-green-700 sm:text-lg">{vnd(sum.paid)}</div></div>
-        <div className={cardCls}><div className="text-xs text-gray-500">Còn nợ</div><div className={`mt-1 text-base font-bold sm:text-lg ${sum.total - sum.paid > 0 ? "text-red-700" : ""}`}>{vnd(sum.total - sum.paid)}</div></div>
+        <div className={`${cardCls} ${accent.blue}`}><div className="text-xs text-gray-500">Phải thu cả năm</div><div className="mt-1 text-base font-bold sm:text-lg">{vnd(sum.total)}</div></div>
+        <div className={`${cardCls} ${accent.teal}`}><div className="text-xs text-gray-500">Đã thu</div><div className="mt-1 text-base font-bold text-green-700 sm:text-lg">{vnd(sum.paid)}</div></div>
+        <div className={`${cardCls} ${accent.rose}`}><div className="text-xs text-gray-500">Còn nợ</div><div className={`mt-1 text-base font-bold sm:text-lg ${sum.total - sum.paid > 0 ? "text-red-700" : ""}`}>{vnd(sum.total - sum.paid)}</div></div>
       </div>
 
       <section className={`${cardCls} overflow-x-auto`}>
@@ -59,8 +59,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
               const r = by.get(m);
               const debt = r ? r.total - r.paid : 0;
               return (
-                <tr key={m} className={m === now ? "bg-blue-50" : ""}>
-                  <td className={tdCls}><Link className="font-medium text-blue-700 hover:underline" href={`/invoices?month=${m}`}>Tháng {m.slice(5)}/{year}</Link></td>
+                <tr key={m} className={m === now ? "bg-brand-50" : ""}>
+                  <td className={tdCls}><Link className="font-medium text-brand-700 hover:underline" href={`/invoices?month=${m}`}>Tháng {m.slice(5)}/{year}</Link></td>
                   {r ? (
                     <>
                       <td className={`${tdCls} text-right`}>{vnd(r.total)}</td>

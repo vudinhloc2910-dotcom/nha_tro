@@ -29,11 +29,11 @@ export default async function InvoicePage({
 
   return (
     <div className="space-y-5">
-      <div><Link href={`/invoices?month=${inv.month}`} className="text-sm text-blue-700 hover:underline">← Hóa đơn tháng {monthLabel(inv.month)}</Link></div>
+      <div><Link href={`/invoices?month=${inv.month}`} className="text-sm text-brand-700 hover:underline">← Hóa đơn tháng {monthLabel(inv.month)}</Link></div>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold">Phòng {inv.code} — tháng {monthLabel(inv.month)}</h1>
         <StatusBadge status={status} />
-        {inv.locked ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Nhập từ sheet (đã khóa)</span> : null}
+        {inv.locked ? <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">Nhập từ sheet (đã khóa)</span> : null}
       </div>
       <Flash ok={sp.ok} err={sp.err} />
 

@@ -24,7 +24,7 @@ export function CopyButton({ path, label, message, primary }: { path: string; la
   }
 
   const base = "rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap";
-  const tone = primary ? "bg-blue-700 text-white hover:bg-blue-800" : "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50";
+  const tone = primary ? "bg-brand-700 text-white hover:bg-brand-800" : "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50";
   return (
     <button type="button" onClick={copy} className={`${base} ${tone}`}>
       {done ? "Đã chép ✓" : label}

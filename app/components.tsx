@@ -1,4 +1,4 @@
-import { btnGhostCls, inputCls } from "@/lib/ui";
+export { MonthPicker } from "./month-picker";
 import { STATUS_CLASS, STATUS_LABEL, type Status } from "@/lib/format";
 
 export function Flash({ ok, err }: { ok?: string; err?: string }) {
@@ -7,15 +7,6 @@ export function Flash({ ok, err }: { ok?: string; err?: string }) {
       {ok && <p className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{ok}</p>}
       {err && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{err}</p>}
     </>
-  );
-}
-
-export function MonthPicker({ action, month }: { action: string; month: string }) {
-  return (
-    <form action={action} method="get" className="flex items-center gap-2">
-      <input type="month" name="month" defaultValue={month} className={`${inputCls} w-auto`} />
-      <button className={btnGhostCls}>Xem</button>
-    </form>
   );
 }
 

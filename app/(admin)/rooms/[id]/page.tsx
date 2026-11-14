@@ -22,7 +22,7 @@ export default async function RoomPage({
   );
   return (
     <div className="space-y-5">
-      <div><Link href="/rooms" className="text-sm text-blue-700 hover:underline">← Danh sách phòng</Link></div>
+      <div><Link href="/rooms" className="text-sm text-brand-700 hover:underline">← Danh sách phòng</Link></div>
       <h1 className="text-xl font-bold">Phòng {room.code}</h1>
       <Flash ok={sp.ok} err={sp.err} />
 

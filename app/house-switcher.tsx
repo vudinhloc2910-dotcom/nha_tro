@@ -18,7 +18,7 @@ export function HouseSwitcher({ houses, currentId }: { houses: H[]; currentId: n
         defaultValue={currentId}
         aria-label="Chọn nhà"
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="max-w-[16rem] rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-sm font-semibold text-blue-900"
+        className="max-w-[16rem] rounded-md border border-brand-300 bg-brand-50 px-2 py-1 text-sm font-semibold text-brand-900"
       >
         {houses.map((h) => (
           <option key={h.id} value={h.id}>{h.name}</option>

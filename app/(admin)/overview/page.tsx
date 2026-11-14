@@ -2,8 +2,12 @@ import Link from "next/link";
 import { all, listHouses } from "@/lib/db";
 import { currentMonth, monthLabel, vnd } from "@/lib/format";
 import { houseReport } from "@/lib/report";
+import { currentHouse } from "@/lib/house";
+import { houseTodos } from "@/lib/todos";
+import { TodoCard } from "../../todo-card";
+import { MonthPicker } from "../../components";
 import { selectHouse } from "../../actions";
-import { cardCls, tdCls, thCls } from "@/lib/ui";
+import { accent, cardCls, tdCls, thCls } from "@/lib/ui";
 
 type Row = { house_id: number; billed: number; paid: number; rooms: number; occupied: number };
 
@@ -12,6 +16,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
   const houses = await listHouses();
+  const cur = await currentHouse();
+  const todos = await houseTodos(cur.id);
   const inv = await all<{ house_id: number; billed: number; paid: number }>(
     `SELECT r.house_id, SUM(i.total) billed, SUM(MIN(i.total, COALESCE(p.paid,0))) paid
      FROM invoices i JOIN rooms r ON r.id=i.room_id
@@ -37,17 +43,16 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Tổng quan các nhà · tháng {monthLabel(month)}</h1>
-        <form action="/overview" method="get" className="flex items-center gap-2">
-          <input type="month" name="month" defaultValue={month} className="rounded-md border border-gray-300 px-3 py-2 text-sm" />
-          <button className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50">Xem</button>
-        </form>
+        <MonthPicker action="/overview" month={month} />
       </div>
 
+      <TodoCard houseName={cur.name} todos={todos} />
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card label="Phải thu" value={vnd(billed)} />
-        <Card label="Còn nợ" value={vnd(billed - paid)} tone={billed - paid > 0 ? "text-red-700" : undefined} />
-        <Card label="Phòng đang thuê" value={`${occ}/${totalRooms}`} />
-        <Card label="Lợi nhuận" value={vnd(profit)} tone={profit < 0 ? "text-red-700" : "text-green-700"} />
+        <Card c="blue" label="Phải thu" value={vnd(billed)} />
+        <Card c="rose" label="Còn nợ" value={vnd(billed - paid)} tone={billed - paid > 0 ? "text-red-700" : undefined} />
+        <Card c="teal" label="Phòng đang thuê" value={`${occ}/${totalRooms}`} />
+        <Card c="violet" label="Lợi nhuận" value={vnd(profit)} tone={profit < 0 ? "text-red-700" : "text-green-700"} />
       </div>
 
       <section className={`${cardCls} overflow-x-auto`}>
@@ -67,22 +72,22 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   <form action={selectHouse}>
                     <input type="hidden" name="house" value={r.house_id} />
                     <input type="hidden" name="back" value="/" />
-                    <button className="text-sm text-blue-700 hover:underline">Mở</button>
+                    <button className="text-sm text-brand-700 hover:underline">Mở</button>
                   </form>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="mt-2 text-xs text-gray-500">Lợi nhuận chỉ hiện khi tháng đó đã có hóa đơn hoặc sổ thu chi. <Link className="text-blue-700 hover:underline" href="/reports">Xem báo cáo chi tiết từng nhà</Link></p>
+        <p className="mt-2 text-xs text-gray-500">Lợi nhuận chỉ hiện khi tháng đó đã có hóa đơn hoặc sổ thu chi. <Link className="text-brand-700 hover:underline" href="/reports">Xem báo cáo chi tiết từng nhà</Link></p>
       </section>
     </div>
   );
 }
 
-function Card({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Card({ label, value, tone, c }: { label: string; value: string; tone?: string; c?: keyof typeof accent }) {
   return (
-    <div className={cardCls}>
+    <div className={`${cardCls} ${accent[c ?? "blue"]}`}>
       <div className="text-xs text-gray-500">{label}</div>
       <div className={`mt-1 text-base font-bold sm:text-lg ${tone ?? ""}`}>{value}</div>
     </div>

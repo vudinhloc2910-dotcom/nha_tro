@@ -32,7 +32,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             <tbody className="divide-y divide-gray-100">
               {invoices.map((i) => (
                 <tr key={i.id}>
-                  <td className={tdCls}><Link className="font-medium text-blue-700 hover:underline" href={`/invoices/${i.id}`}>{i.code}</Link></td>
+                  <td className={tdCls}><Link className="font-medium text-brand-700 hover:underline" href={`/invoices/${i.id}`}>{i.code}</Link></td>
                   <td className={tdCls}>{i.tenant_name}{!i.has_reading && <span className="ml-1 text-xs text-amber-700">(thiếu chỉ số)</span>}</td>
                   <td className={tdCls}>{dateVN(i.due_date)}</td>
                   <td className={`${tdCls} text-right`}>{vnd(i.total)}</td>

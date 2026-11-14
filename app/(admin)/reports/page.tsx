@@ -2,7 +2,7 @@ import Link from "next/link";
 import { currentHouse } from "@/lib/house";
 import { currentMonth, vnd } from "@/lib/format";
 import { houseReport } from "@/lib/report";
-import { cardCls, tdCls, thCls } from "@/lib/ui";
+import { accent, cardCls, tdCls, thCls } from "@/lib/ui";
 
 const CAT: Record<string, string> = { dien: "Tiền điện (trả nhà cung cấp)", nuoc: "Tiền nước", mang: "Mạng", dich_vu: "Dịch vụ", tien_phong: "Thuê nhà trả chủ", phat_sinh: "Chi phí phát sinh" };
 
@@ -29,7 +29,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </div>
         <div className="flex gap-2">
           {[2025, 2026, 2027].map((y) => (
-            <Link key={y} href={`/reports?year=${y}`} className={`rounded-md border px-3 py-1.5 text-sm ${y === year ? "border-blue-700 bg-blue-700 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{y}</Link>
+            <Link key={y} href={`/reports?year=${y}`} className={`rounded-md border px-3 py-1.5 text-sm ${y === year ? "border-brand-700 bg-brand-700 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{y}</Link>
           ))}
         </div>
       </div>
@@ -39,10 +39,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Card label="Doanh thu" value={vnd(revenue)} />
-            <Card label="Tổng chi" value={vnd(cost)} />
-            <Card label="Lợi nhuận (sau chi, lương)" value={vnd(profit)} tone={profit < 0 ? "text-red-700" : "text-green-700"} />
-            <Card label="Tỷ lệ đã thu" value={billed ? `${Math.round((paid / billed) * 100)}%` : "-"} />
+            <Card c="blue" label="Doanh thu" value={vnd(revenue)} />
+            <Card c="amber" label="Tổng chi" value={vnd(cost)} />
+            <Card c="violet" label="Lợi nhuận (sau chi, lương)" value={vnd(profit)} tone={profit < 0 ? "text-red-700" : "text-green-700"} />
+            <Card c="teal" label="Tỷ lệ đã thu" value={billed ? `${Math.round((paid / billed) * 100)}%` : "-"} />
           </div>
 
           {partners.length > 0 && (
@@ -131,9 +131,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   );
 }
 
-function Card({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Card({ label, value, tone, c }: { label: string; value: string; tone?: string; c?: keyof typeof accent }) {
   return (
-    <div className={cardCls}>
+    <div className={`${cardCls} ${accent[c ?? "blue"]}`}>
       <div className="text-xs text-gray-500">{label}</div>
       <div className={`mt-1 text-base font-bold sm:text-lg ${tone ?? ""}`}>{value}</div>
     </div>
