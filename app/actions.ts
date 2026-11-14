@@ -418,3 +418,87 @@ export async function saveRoomProfile(inp: RoomProfileInput): Promise<{ ok: true
     return { ok: false, error: e instanceof Error ? e.message : "Không lưu được" };
   }
 }
+
+/* ---------- Tạo nhiều phòng ---------- */
+/** Tạo phòng nhanh theo tầng: từ tầng A đến tầng B, mỗi tầng N phòng, đánh số 101, 102... theo tầng. Phòng đã có thì bỏ qua. */
+export async function createRoomsByFloor(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  const from = Math.round(num(f, "from")), to = Math.round(num(f, "to")), per = Math.round(num(f, "per"));
+  const rent = Math.max(0, Math.round(num(f, "rent")));
+  if (!(from >= 1 && to >= from && to <= 40 && per >= 1 && per <= 40)) back("/rooms", { err: "Nhập đúng: từ tầng (1 trở lên), đến tầng, số phòng mỗi tầng (tối đa 40)" });
+  const have = new Set((await all<{ code: string }>("SELECT code FROM rooms WHERE house_id=?", house.id)).map((r) => r.code));
+  const st: { sql: string; args: (string | number)[] }[] = [];
+  let n = 0;
+  for (let fl = from; fl <= to; fl++) {
+    for (let i = 1; i <= per; i++) {
+      const code = String(fl * 100 + i);
+      if (have.has(code)) continue;
+      st.push({ sql: "INSERT INTO rooms(house_id, code, rent, due_day) VALUES (?,?,?,15)", args: [house.id, code, rent] });
+      n++;
+    }
+  }
+  if (st.length) await batch(st);
+  refresh();
+  back("/rooms", { ok: n ? `Đã tạo ${n} phòng (tầng ${from} đến ${to}). Vào từng phòng để thêm khách.` : "Các phòng này đã có sẵn, không tạo thêm." });
+}
+
+const cleanNum = (v: string) => {
+  const t = String(v ?? "").trim().replace(/[đ₫\s]/gi, "");
+  if (!t) return 0;
+  const n = Number(/^\d{1,3}([.,]\d{3})+$/.test(t) ? t.replace(/[.,]/g, "") : t.replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Dán bảng từ Excel (copy các ô rồi dán): cột Phòng | Tên khách | Số điện thoại | Số người | Giá thuê. Dòng tiêu đề tự bỏ qua. */
+export async function importRoomsPaste(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  const text = str(f, "table");
+  if (!text) back("/rooms", { err: "Hãy dán bảng từ Excel vào ô trống" });
+  const rows = text.split(/\r?\n/).map((l) => l.split(/\t|;/).map((c) => c.trim())).filter((r) => r.some(Boolean));
+  if (rows.length > 300) back("/rooms", { err: "Tối đa 300 dòng mỗi lần" });
+  const existing = new Map((await all<{ id: number; code: string }>("SELECT id, code FROM rooms WHERE house_id=?", house.id)).map((r) => [r.code, r.id]));
+  let made = 0, updated = 0, tenants = 0, skipped = 0;
+  for (const r of rows) {
+    const code = (r[0] ?? "").replace(/^(ph[oò]ng)\s*/i, "").trim();
+    if (!code || code.length > 20 || /^(ph[oò]ng|s[oố]\s*ph[oò]ng|m[aã])$/i.test(r[0] ?? "")) { skipped++; continue; }
+    const name = (r[1] ?? "").slice(0, 80), phone = (r[2] ?? "").replace(/[^\d+]/g, "").slice(0, 20);
+    const people = Math.max(1, Math.round(cleanNum(r[3] ?? "")) || 1), rent = Math.max(0, Math.round(cleanNum(r[4] ?? "")));
+    let id = existing.get(code);
+    if (id === undefined) {
+      id = (await run("INSERT INTO rooms(house_id, code, rent, due_day) VALUES (?,?,?,15)", house.id, code, rent)).lastInsertRowid;
+      existing.set(code, id);
+      made++;
+    } else if (rent > 0) {
+      await run("UPDATE rooms SET rent=? WHERE id=?", rent, id);
+      updated++;
+    }
+    if (name) {
+      const cur = await one<{ id: number }>("SELECT id FROM tenants WHERE room_id=? AND active=1", id);
+      if (cur) await run("UPDATE tenants SET name=?, phone=?, people=? WHERE id=?", name, phone, people, cur.id);
+      else await run("INSERT INTO tenants(room_id, name, phone, people, move_in) VALUES (?,?,?,?,?)", id, name, phone, people, today());
+      tenants++;
+    }
+  }
+  refresh();
+  back("/rooms", { ok: `Đã nhập: ${made} phòng mới, ${updated} phòng cập nhật giá, ${tenants} khách thuê${skipped ? `, bỏ qua ${skipped} dòng` : ""}.` });
+}
+
+/* ---------- Thu lẻ: thêm một khoản thu vào hóa đơn đã có của phòng ---------- */
+export async function addRoomExtra(f: FormData) {
+  await requireAdmin();
+  const roomId = num(f, "room_id");
+  const m = str(f, "month");
+  const name = str(f, "name").slice(0, 80);
+  const amount = Math.round(num(f, "amount"));
+  const dest = `/rooms/${roomId}`;
+  if (!MONTH_RE.test(m)) back(dest, { err: "Chọn tháng", tab: "history" });
+  if (!name || !amount) back(dest, { err: "Nhập tên khoản và số tiền", tab: "history" });
+  const inv = await one<{ id: number }>("SELECT id FROM invoices WHERE room_id=? AND month=?", roomId, m);
+  if (!inv) back(dest, { err: `Tháng ${m.slice(5)}/${m.slice(0, 4)} chưa có hóa đơn. Hãy tạo hóa đơn ở trang Hóa đơn tháng trước.`, tab: "history" });
+  await run("INSERT INTO extras(room_id,month,name,amount) VALUES (?,?,?,?)", roomId, m, name, amount);
+  await generateInvoice(roomId, m, { force: true });
+  refresh();
+  back(dest, { ok: `Đã thêm khoản "${name}" vào hóa đơn tháng ${m.slice(5)}/${m.slice(0, 4)}`, tab: "history" });
+}

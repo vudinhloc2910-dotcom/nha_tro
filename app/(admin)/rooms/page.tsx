@@ -1,50 +1,85 @@
-import Link from "next/link";
-import { all } from "@/lib/db";
 import { currentHouse } from "@/lib/house";
 import { vnd } from "@/lib/format";
-import { addRoom } from "../../actions";
+import { roomTiles } from "@/lib/rooms";
+import { addRoom, createRoomsByFloor, importRoomsPaste } from "../../actions";
 import { Flash } from "../../components";
-import { btnCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
-
-type Row = { id: number; code: string; rent: number; due_day: number; name: string | null; people: number | null };
+import { RoomMap } from "../../room-map";
+import { accent, btnCls, cardCls, inputCls, labelCls } from "@/lib/ui";
 
 export default async function RoomsPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string }> }) {
   const sp = await searchParams;
   const house = await currentHouse();
-  const rooms = await all<Row>(
-    `SELECT r.id, r.code, r.rent, r.due_day, t.name, t.people
-     FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`,
-    house.id
-  );
+  const rooms = await roomTiles(house.id);
+  const rented = rooms.filter((r) => r.status !== "vacant").length;
+  const vacant = rooms.length - rented;
+  const debtRooms = rooms.filter((r) => r.status === "debt" || r.status === "overdue");
+  const debt = debtRooms.reduce((a, r) => a + r.debt, 0);
+  const potential = rooms.filter((r) => r.status === "vacant").reduce((a, r) => a + r.rent, 0);
+
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold">Phòng & khách thuê <span className="text-base font-normal text-gray-600">· {house.name}</span></h1>
+      <div>
+        <h1 className="text-xl font-bold">Nhà & phòng</h1>
+        <p className="text-sm text-gray-600">{house.name}{house.address ? ` · ${house.address}` : ""}</p>
+      </div>
       <Flash ok={sp.ok} err={sp.err} />
-      <section className={`${cardCls} overflow-x-auto`}>
-        <table className="w-full">
-          <thead><tr><th className={thCls}>Phòng</th><th className={thCls}>Khách</th><th className={thCls}>Số người</th><th className={`${thCls} text-right`}>Giá thuê</th><th className={thCls}>Hạn đóng</th></tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {rooms.map((r) => (
-              <tr key={r.id}>
-                <td className={tdCls}><Link className="font-medium text-brand-700 hover:underline" href={`/rooms/${r.id}`}>{r.code}</Link></td>
-                <td className={tdCls}>{r.name ?? <span className="text-gray-500">Trống</span>}</td>
-                <td className={tdCls}>{r.people ?? "-"}</td>
-                <td className={`${tdCls} text-right`}>{vnd(r.rent)}</td>
-                <td className={tdCls}>Ngày {r.due_day}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat c="blue" label="Tổng số phòng" value={String(rooms.length)} />
+        <Stat c="teal" label="Đang thuê" value={`${rented}/${rooms.length}`} sub={rooms.length ? `${Math.round((rented / rooms.length) * 100)}% lấp đầy` : ""} />
+        <Stat c="amber" label="Phòng trống" value={String(vacant)} sub={vacant ? `mất ${vnd(potential)}/tháng` : "đã kín phòng"} />
+        <Stat c="rose" label="Nợ tiền" value={String(debtRooms.length)} sub={debt ? vnd(debt) : "không có nợ"} />
+      </div>
+
+      {rooms.length === 0 ? (
+        <section className={`${cardCls} text-center`}>
+          <p className="font-semibold">Nhà này chưa có phòng nào</p>
+          <p className="mt-1 text-sm text-gray-600">Dùng một trong hai cách bên dưới: tạo nhanh theo tầng, hoặc dán danh sách từ Excel.</p>
+        </section>
+      ) : (
+        <RoomMap rooms={rooms} />
+      )}
+
       <section className={cardCls}>
-        <h2 className="mb-3 font-semibold">Thêm phòng</h2>
-        <form action={addRoom} className="grid gap-3 sm:grid-cols-4">
-          <div><label className={labelCls}>Số phòng</label><input name="code" required className={inputCls} /></div>
-          <div><label className={labelCls}>Giá thuê (đ)</label><input name="rent" type="number" min="0" className={inputCls} /></div>
-          <div><label className={labelCls}>Hạn đóng (ngày)</label><input name="due_day" type="number" min="1" max="31" defaultValue={15} className={inputCls} /></div>
-          <div className="flex items-end"><button className={btnCls}>Thêm</button></div>
+        <h2 className="mb-1 font-semibold">Tạo nhanh nhiều phòng theo tầng</h2>
+        <p className="mb-3 text-xs text-gray-500">Ví dụ từ tầng 1 đến tầng 3, mỗi tầng 4 phòng sẽ tạo 101 đến 104, 201 đến 204, 301 đến 304. Phòng đã có thì bỏ qua.</p>
+        <form action={createRoomsByFloor} className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div><label className={labelCls}>Từ tầng</label><input name="from" type="number" min="1" max="40" defaultValue={1} className={inputCls} /></div>
+          <div><label className={labelCls}>Đến tầng</label><input name="to" type="number" min="1" max="40" defaultValue={3} className={inputCls} /></div>
+          <div><label className={labelCls}>Số phòng mỗi tầng</label><input name="per" type="number" min="1" max="40" defaultValue={4} className={inputCls} /></div>
+          <div><label className={labelCls}>Giá thuê chung (đ)</label><input name="rent" type="number" min="0" className={inputCls} placeholder="Sửa lại từng phòng sau" /></div>
+          <div className="flex items-end"><button className={`${btnCls} w-full`}>Tạo phòng</button></div>
         </form>
       </section>
+
+      <section className={cardCls}>
+        <h2 className="mb-1 font-semibold">Nhập từ Excel (dán bảng)</h2>
+        <p className="mb-3 text-xs text-gray-500">Trong Excel, bôi đen các ô theo thứ tự cột <b>Phòng · Tên khách · Số điện thoại · Số người · Giá thuê</b>, bấm Ctrl+C rồi dán vào ô dưới. Dòng tiêu đề tự bỏ qua. Phòng đã có thì cập nhật giá và khách.</p>
+        <form action={importRoomsPaste} className="space-y-3">
+          <textarea name="table" rows={5} placeholder={"101\tNguyễn Văn A\t0912345678\t2\t3500000\n102\tTrần Thị B\t0987654321\t1\t3200000"} className={`${inputCls} font-mono`} />
+          <button className={btnCls}>Nhập vào nhà này</button>
+        </form>
+      </section>
+
+      <details className={cardCls}>
+        <summary className="cursor-pointer font-semibold">Thêm một phòng</summary>
+        <form action={addRoom} className="mt-3 grid gap-3 sm:grid-cols-4">
+          <div><label className={labelCls}>Số phòng</label><input name="code" required className={inputCls} /></div>
+          <div><label className={labelCls}>Giá thuê (đ)</label><input name="rent" type="number" min="0" className={inputCls} /></div>
+          <div><label className={labelCls}>Ngày đóng tiền</label><input name="due_day" type="number" min="1" max="31" defaultValue={15} className={inputCls} /></div>
+          <div className="flex items-end"><button className={btnCls}>Thêm</button></div>
+        </form>
+      </details>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, c }: { label: string; value: string; sub?: string; c: keyof typeof accent }) {
+  return (
+    <div className={`${cardCls} ${accent[c]}`}>
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="mt-1 text-xl font-bold">{value}</div>
+      {sub ? <div className="mt-0.5 text-xs text-gray-500">{sub}</div> : null}
     </div>
   );
 }
