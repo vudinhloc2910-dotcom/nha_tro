@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { all, one } from "@/lib/db";
-import { dateVN, monthLabel, statusOf, today, vnd } from "@/lib/format";
+import { dateVN, payWindowText, monthLabel, statusOf, today, vnd } from "@/lib/format";
 import { addExtra, addPayment, deleteExtra, deletePayment, regenerateInvoice, unlockInvoice } from "../../../actions";
 import { Flash, StatusBadge } from "../../../components";
 import { PrintButton } from "../../../print-button";
 import { btnCls, btnDangerCls, btnGhostCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
 
-type Inv = { id: number; room_id: number; code: string; month: string; tenant_name: string; total: number; due_date: string; token: string; locked: number; state: string };
+type Inv = { id: number; room_id: number; code: string; month: string; tenant_name: string; total: number; due_date: string; period_start: string | null; token: string; locked: number; state: string };
 
 export default async function InvoicePage({
   params, searchParams,
@@ -38,7 +38,7 @@ export default async function InvoicePage({
       <Flash ok={sp.ok} err={sp.err} />
 
       <section className={cardCls}>
-        <p className="mb-3 text-sm text-gray-600">Khách: {inv.tenant_name} · Hạn đóng: {dateVN(inv.due_date)}</p>
+        <p className="mb-3 text-sm text-gray-600">Khách: {inv.tenant_name} · Hạn đóng: {payWindowText(inv.period_start, inv.due_date)}</p>
         <table className="w-full">
           <thead><tr><th className={thCls}>Khoản</th><th className={thCls}>Chi tiết</th><th className={`${thCls} text-right`}>Thành tiền</th></tr></thead>
           <tbody className="divide-y divide-gray-100">

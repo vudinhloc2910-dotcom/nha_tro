@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSettings, one, readAll } from "@/lib/db";
-import { dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
+import { dateVN, monthLabel, payWindowText, statusOf, vnd } from "@/lib/format";
 import { PrintButton } from "../../print-button";
 import { reportIssue } from "../../actions";
 
@@ -59,7 +59,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
           <Row k="Phòng" v={inv.code} bold />
           <Row k="Khách thuê" v={inv.tenant_name} />
           <Row k="Kỳ thu" v={inv.period_start ? `${dateVN(inv.period_start)} - ${dateVN(inv.due_date)}` : `Tháng ${monthLabel(inv.month)}`} />
-          <Row k="Hạn đóng" v={dateVN(inv.due_date)} />
+          <Row k="Hạn đóng" v={payWindowText(inv.period_start, inv.due_date)} />
         </dl>
 
         <div className={`${dash} my-3`} />
