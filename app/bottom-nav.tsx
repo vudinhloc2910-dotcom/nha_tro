@@ -23,12 +23,12 @@ const TABS = [
 ];
 const MORE = [
   { href: "/tenants", label: "Khách thuê" },
+  { href: "/history", label: "Lịch sử thu tiền" },
+  { href: "/settings", label: "Cài đặt" },
   { href: "/issues", label: "Sự cố và bảo trì" },
   { href: "/ledger", label: "Sổ thu chi" },
-  { href: "/history", label: "Lịch sử thu tiền" },
   { href: "/invoices", label: "Danh sách hóa đơn" },
   { href: "/readings", label: "Bảng điện nước" },
-  { href: "/settings", label: "Cài đặt" },
   { href: "/import", label: "Nhập dữ liệu sheet" },
   { href: "/account", label: "Đổi mật khẩu" },
 ];

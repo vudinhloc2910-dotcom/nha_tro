@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 
 const MAIN = [
   { href: "/overview", label: "Tổng quan", on: "bg-sky-100 text-sky-900", dot: "bg-sky-500" },
+  { href: "/rooms", label: "Phòng", on: "bg-orange-100 text-orange-900", dot: "bg-orange-500" },
+  { href: "/tenants", label: "Khách thuê", on: "bg-rose-100 text-rose-900", dot: "bg-rose-500" },
   { href: "/", label: "Hóa đơn tháng", on: "bg-brand-100 text-brand-900", dot: "bg-brand-600" },
   { href: "/history", label: "Lịch sử thu", on: "bg-teal-100 text-teal-900", dot: "bg-teal-500" },
   { href: "/reports", label: "Báo cáo", on: "bg-violet-100 text-violet-900", dot: "bg-violet-500" },
-  { href: "/rooms", label: "Phòng", on: "bg-orange-100 text-orange-900", dot: "bg-orange-500" },
-  { href: "/tenants", label: "Khách thuê", on: "bg-rose-100 text-rose-900", dot: "bg-rose-500" },
   { href: "/settings", label: "Cài đặt", on: "bg-slate-200 text-slate-900", dot: "bg-slate-500" },
 ];
 const MORE = [
