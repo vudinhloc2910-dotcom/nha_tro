@@ -11,6 +11,18 @@ const th = "border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-xs font
 const td = "border-b border-gray-100 px-2 py-1.5 align-middle";
 const num = (s: string) => { const n = Number(String(s).trim().replace(",", ".")); return Number.isFinite(n) ? n : 0; };
 
+/** Ô nhập tiền: hiện dấu chấm ngăn nghìn và đơn vị "đ" (giống cột Tổng thu), bên trong vẫn lưu dạng số thường. */
+function MoneyInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const digits = value.replace(/[^\d]/g, "");
+  const shown = digits ? Number(digits).toLocaleString("vi-VN") : "";
+  return (
+    <div className="relative">
+      <input inputMode="numeric" value={shown} placeholder={placeholder ?? "0"} onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))} className={`${inp} pr-6 text-right`} />
+      <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-gray-500">đ</span>
+    </div>
+  );
+}
+
 type Exp = { name: string; qty: string; unit: string };
 type NR = { room: string; rent: string; people: string; phone: string; total: string; note: string };
 export type LiveThu = { dien: number; nuoc: number; mang: number; dich_vu: number; tien_phong: number; phat_sinh: number };
@@ -89,7 +101,7 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
                     </td>
                     <td className={td}><input className={inp} value={it.name} placeholder="VD: Sửa điều hòa 202" onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} /></td>
                     <td className={td}><input className={`${inp} text-right`} type="number" min="0" inputMode="decimal" value={it.qty} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} /></td>
-                    <td className={td}><input className={`${inp} text-right`} type="number" inputMode="numeric" value={it.unit} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)))} /></td>
+                    <td className={td}><MoneyInput value={it.unit} onChange={(v) => setItems(items.map((x, j) => (j === i ? { ...x, unit: v } : x)))} /></td>
                     <td className={`${td} text-right font-medium`}>{vnd(itemTotal(it))}</td>
                     <td className={td}><button type="button" aria-label="Xóa dòng" onClick={() => setItems(items.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600">✕</button></td>
                   </tr>
@@ -118,10 +130,10 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
                   return (
                     <tr key={i}>
                       <td className={td}><input className={inp} value={r.room} onChange={(e) => up({ room: e.target.value })} /></td>
-                      <td className={td}><input className={`${inp} text-right`} type="number" inputMode="numeric" value={r.rent} onChange={(e) => up({ rent: e.target.value, total: r.total || String(num(e.target.value) * 2) })} /></td>
+                      <td className={td}><MoneyInput value={r.rent} onChange={(v) => up({ rent: v, total: r.total || String(num(v) * 2) })} /></td>
                       <td className={td}><input className={`${inp} text-right`} type="number" min="1" value={r.people} onChange={(e) => up({ people: e.target.value })} /></td>
                       <td className={td}><input className={inp} inputMode="tel" value={r.phone} onChange={(e) => up({ phone: e.target.value })} /></td>
-                      <td className={td}><input className={`${inp} text-right`} type="number" inputMode="numeric" value={r.total} onChange={(e) => up({ total: e.target.value })} /></td>
+                      <td className={td}><MoneyInput value={r.total} onChange={(v) => up({ total: v })} /></td>
                       <td className={td}><input className={inp} value={r.note} placeholder="VD: 26/01" onChange={(e) => up({ note: e.target.value })} /></td>
                       <td className={td}><button type="button" aria-label="Xóa dòng" onClick={() => setRooms(rooms.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600">✕</button></td>
                     </tr>
@@ -154,7 +166,7 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
                   <td className={td}>
                     {r.k === "tien_phong" && rentFixed
                       ? <div className="text-right">{vnd(ledger.rentMonthly)}<div className="text-[11px] text-gray-400">chia đều theo tháng (Cài đặt)</div></div>
-                      : <input className={`${inp} text-right`} type="number" min="0" inputMode="numeric" value={chi[r.k]} placeholder="0" onChange={(e) => setChi({ ...chi, [r.k]: e.target.value })} />}
+                      : <MoneyInput value={chi[r.k]} onChange={(v) => setChi({ ...chi, [r.k]: v })} />}
                   </td>
                   <td className={`${td} text-right ${r.thu - r.chi < 0 ? "text-red-700" : ""}`}>{vnd(r.thu - r.chi)}</td>
                 </tr>
