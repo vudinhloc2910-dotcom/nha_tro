@@ -142,11 +142,11 @@ export function ResidentsTable({ initial, roomCodes }: { initial: ResidentRow[];
         </div>
       </div>
 
-      <div data-nav-scope className="max-h-[70vh] overflow-auto rounded-xl border border-gray-200">
+      <div data-nav-scope className="max-h-[calc(100vh-9rem)] overflow-auto rounded-xl border border-gray-200">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className={`${th} sticky left-0 z-20 w-32 bg-white`}>Phòng</th>
+              <th className={`${th} sticky left-0 z-20 min-w-[7.5rem] bg-white`}>Phòng</th>
               {cols.map((c) => <th key={c.k} className={th}>{c.label}</th>)}
               <th className={`${th} w-8`} />
             </tr>
@@ -158,8 +158,8 @@ export function ResidentsTable({ initial, roomCodes }: { initial: ResidentRow[];
                 <tr key={`${gi}-${pi}`} className={`${gi % 2 ? "bg-gray-50/60" : "bg-white"} ${pi === 0 ? "border-t-2 border-t-gray-200" : ""} hover:bg-brand-50/40`}>
                   {pi === 0 && (
                     <td rowSpan={g.people.length} className="sticky left-0 z-10 border-b border-r border-gray-200 bg-inherit px-1.5 py-1 align-top">
-                      <input value={g.room} list="res-rooms" onChange={(e) => setRoom(gi, e.target.value)} placeholder="Số phòng" className={`${cellInp} text-base font-bold text-brand-800`} />
-                      <button type="button" onClick={() => addPerson(gi)} className="ml-1.5 mt-1 text-xs font-medium text-brand-700 hover:underline">+ Thêm người</button>
+                      <input value={g.room} list="res-rooms" onChange={(e) => setRoom(gi, e.target.value)} placeholder="Số phòng" className={`${cellInp} min-w-[5.5rem] text-base font-bold text-brand-800`} />
+                      <button type="button" onClick={() => addPerson(gi)} className="ml-1.5 mt-1 whitespace-nowrap text-xs font-medium text-brand-700 hover:underline">+ Thêm người</button>
                     </td>
                   )}
                   {cols.map((c) => (

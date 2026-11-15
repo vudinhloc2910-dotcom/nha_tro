@@ -33,7 +33,7 @@ export default async function TenantsPage() {
   const zalo = (p: string) => { const z = p.replace(/[^\d]/g, ""); return z.length >= 9 ? `https://zalo.me/${z.startsWith("84") ? "0" + z.slice(2) : z}` : ""; };
 
   return (
-    <div className="space-y-4">
+    <div className="relative left-1/2 w-[min(calc(100vw-8rem),1700px)] -translate-x-1/2 space-y-4">
       <div>
         <h1 className="text-xl font-bold">Khách thuê</h1>
         <p className="text-sm text-gray-600">{house.name}</p>
