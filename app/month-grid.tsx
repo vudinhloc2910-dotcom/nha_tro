@@ -294,16 +294,16 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
         })}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
+      <div className="hidden max-h-[calc(100vh-7rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className={`${labelCell} top-0`}>{houseName}</th>
+              <th className="sticky left-0 top-0 z-30 w-36 min-w-[9rem] border-b border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-semibold uppercase text-gray-600">{houseName}</th>
               {rooms.map((r) => {
                 const inv = invs[r.id];
                 const st = inv ? statusOf(inv.total, inv.paid, inv.due) : null;
                 return (
-                  <th key={r.id} className="min-w-[10.5rem] border-b border-gray-200 bg-gray-50 px-2 py-2 text-left align-top">
+                  <th key={r.id} className="sticky top-0 z-20 min-w-[10.5rem] border-b border-gray-200 bg-gray-50 px-2 py-2 text-left align-top shadow-[0_1px_0_0_#e5e7eb]">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-base font-bold">Phòng {r.code}</span>
                       <button type="button" onClick={() => setEditing(r)} className="rounded border border-brand-300 bg-white px-2 py-0.5 text-xs font-medium text-brand-800 hover:bg-brand-50">Sửa</button>
@@ -316,7 +316,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                   </th>
                 );
               })}
-              <th className="min-w-[8rem] border-b border-l border-gray-200 bg-brand-100 px-2 py-2 text-center align-middle text-base font-extrabold text-brand-900">TỔNG</th>
+              <th className="sticky top-0 z-20 min-w-[8rem] border-b border-l border-gray-200 bg-brand-100 px-2 py-2 text-center align-middle text-base font-extrabold text-brand-900 shadow-[0_1px_0_0_#e5e7eb]">TỔNG</th>
             </tr>
           </thead>
           <tbody>
