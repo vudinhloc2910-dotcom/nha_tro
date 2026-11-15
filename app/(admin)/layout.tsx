@@ -8,23 +8,7 @@ import { selectedMonth } from "@/lib/month";
 import { HouseSwitcher } from "../house-switcher";
 import { MonthPicker } from "../month-picker";
 import { BottomNav } from "../bottom-nav";
-
-const MAIN = [
-  { href: "/overview", label: "Tổng quan" },
-  { href: "/", label: "Hóa đơn tháng" },
-  { href: "/history", label: "Lịch sử thu" },
-  { href: "/reports", label: "Báo cáo" },
-  { href: "/rooms", label: "Phòng" },
-  { href: "/tenants", label: "Khách thuê" },
-  { href: "/settings", label: "Cài đặt" },
-];
-const MORE = [
-  { href: "/issues", label: "Sự cố và bảo trì" },
-  { href: "/ledger", label: "Sổ thu chi" },
-  { href: "/invoices", label: "Danh sách hóa đơn" },
-  { href: "/readings", label: "Bảng điện nước" },
-  { href: "/import", label: "Nhập dữ liệu sheet" },
-];
+import { TopNav } from "../top-nav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
@@ -36,26 +20,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div>
       <header className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
           <MonthPicker month={month} />
           <HouseSwitcher houses={houses} currentId={house.id} />
-          <nav className="hidden flex-wrap items-center gap-1 text-sm md:flex">
-            {MAIN.map((n) => (
-              <Link key={n.href} href={n.href} className="relative rounded-lg px-2.5 py-1.5 text-gray-700 hover:bg-brand-50">
-                {n.label}
-                {n.href === "/settings" && badge > 0 && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-amber-500" />}
-              </Link>
-            ))}
-            <details className="relative">
-              <summary className="cursor-pointer list-none rounded-lg px-2.5 py-1.5 text-gray-700 hover:bg-brand-50">Khác ▾</summary>
-              <div className="absolute z-10 mt-1 w-52 rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
-                {MORE.map((n) => (
-                  <Link key={n.href} href={n.href} className="block px-3 py-2 text-gray-700 hover:bg-brand-50">{n.label}</Link>
-                ))}
-                <a href="/export" className="block px-3 py-2 text-gray-700 hover:bg-brand-50">Tải file CSV</a>
-              </div>
-            </details>
-          </nav>
+          <TopNav badge={badge} />
           <div className="ml-auto hidden items-center gap-4 md:flex">
             <Link href="/account" className="text-sm text-gray-600 hover:underline">Đổi mật khẩu</Link>
             <form action={logout}><button className="text-sm text-gray-600 hover:underline">Đăng xuất</button></form>

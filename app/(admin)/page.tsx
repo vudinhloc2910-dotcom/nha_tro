@@ -17,7 +17,7 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Prom
   const ledger = await loadLedgerMonth(house.id, month);
 
   return (
-    <div className="space-y-4">
+    <div className="relative left-1/2 w-[min(calc(100vw-2rem),1800px)] -translate-x-1/2 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Hóa đơn tháng {monthLabel(month)}</h1>

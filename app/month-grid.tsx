@@ -53,8 +53,9 @@ function buildInput(r: RoomView, f: Form, waterMode: "meter" | "person"): RoomIn
   };
 }
 
-const cell = "border-b border-gray-100 px-2 py-1.5 align-top";
-const labelCell = "sticky left-0 z-10 w-36 min-w-[9rem] border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-xs font-semibold uppercase text-gray-600";
+const cell = "border-b border-gray-100 px-1 py-0.5 align-top";
+const labelCell = "sticky left-0 z-10 w-28 min-w-[7rem] border-b border-gray-100 bg-gray-50 px-1.5 py-1 text-[11px] font-semibold uppercase leading-tight text-gray-600";
+const inpT = "w-full rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[13px] text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 const inp = "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 
 export function MonthGrid({ month, houseId, houseName, waterMode, services, rooms, vacant, ledger }: {
@@ -294,29 +295,29 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
         })}
       </div>
 
-      <div className="hidden max-h-[calc(100vh-7rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
+      <div className="hidden max-h-[calc(100vh-6rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-30 w-36 min-w-[9rem] border-b border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-semibold uppercase text-gray-600">{houseName}</th>
+              <th className="sticky left-0 top-0 z-30 w-28 min-w-[7rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] font-semibold uppercase leading-tight text-gray-600">{houseName}</th>
               {rooms.map((r) => {
                 const inv = invs[r.id];
                 const st = inv ? statusOf(inv.total, inv.paid, inv.due) : null;
                 return (
-                  <th key={r.id} className="sticky top-0 z-20 min-w-[10.5rem] border-b border-gray-200 bg-gray-50 px-2 py-2 text-left align-top shadow-[0_1px_0_0_#e5e7eb]">
+                  <th key={r.id} className="sticky top-0 z-20 min-w-[8.75rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-left align-top shadow-[0_1px_0_0_#e5e7eb]">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-base font-bold">Phòng {r.code}</span>
-                      <button type="button" onClick={() => setEditing(r)} className="rounded border border-brand-300 bg-white px-2 py-0.5 text-xs font-medium text-brand-800 hover:bg-brand-50">Sửa</button>
+                      <span className="truncate text-sm font-bold">Phòng {r.code}</span>
+                      <button type="button" onClick={() => setEditing(r)} className="rounded border border-brand-300 bg-white px-1.5 text-[11px] font-medium leading-5 text-brand-800 hover:bg-brand-50">Sửa</button>
                     </div>
-                    <div className="truncate text-xs font-normal text-gray-600" title={r.tenantName}>{r.tenantName}{r.phone ? ` · ${r.phone}` : ""}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <div className="truncate text-[11px] font-normal leading-tight text-gray-600" title={r.tenantName}>{r.tenantName}{r.phone ? ` · ${r.phone}` : ""}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
                       {st && <StatusBadge status={st} />}
                       {inv?.locked && !dirty(r) ? <span className="text-[11px] font-normal text-brand-700">(từ sheet)</span> : null}
                     </div>
                   </th>
                 );
               })}
-              <th className="sticky top-0 z-20 min-w-[8rem] border-b border-l border-gray-200 bg-brand-100 px-2 py-2 text-center align-middle text-base font-extrabold text-brand-900 shadow-[0_1px_0_0_#e5e7eb]">TỔNG</th>
+              <th className="sticky top-0 z-20 min-w-[6.5rem] border-b border-l border-gray-200 bg-brand-100 px-1.5 py-1 text-center align-middle text-sm font-extrabold text-brand-900 shadow-[0_1px_0_0_#e5e7eb]">TỔNG</th>
             </tr>
           </thead>
           <tbody>
@@ -324,8 +325,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
               {rooms.map((r) => (
                 <td key={r.id} className={cell}>
                   <div className="space-y-1">
-                    <label className="flex items-center gap-1 text-[11px] text-gray-500">Từ<input type="date" data-room={r.id} value={forms[r.id].periodStart} onChange={(e) => setF(r.id, { periodStart: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} text-xs`} /></label>
-                    <label className="flex items-center gap-1 text-[11px] text-gray-500">Đến<input type="date" data-room={r.id} value={forms[r.id].periodEnd} onChange={(e) => setF(r.id, { periodEnd: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} text-xs`} /></label>
+                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Từ<input type="date" data-room={r.id} value={forms[r.id].periodStart} onChange={(e) => setF(r.id, { periodStart: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
+                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Đến<input type="date" data-room={r.id} value={forms[r.id].periodEnd} onChange={(e) => setF(r.id, { periodEnd: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
                   </div>
                 </td>
               ))}
@@ -342,14 +343,14 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 const warn = used !== null && used < 0 ? "Nhỏ hơn số cũ" : used !== null && r.prevUsage && r.prevUsage.e > 20 && used > r.prevUsage.e * 3 ? `Tăng bất thường (tháng trước ${Math.round(r.prevUsage.e)} kWh)` : "";
                 return (
                   <td key={r.id} className={cell}>
-                    <input type="number" step="0.1" min="0" inputMode="decimal" data-room={r.id} value={f.elecNew} placeholder="Nhập số mới" onChange={(e) => setF(r.id, { elecNew: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} ${used !== null && used < 0 ? "border-red-500 bg-red-50" : warn ? "border-amber-500 bg-amber-50" : ""}`} />
-                    {used !== null && used >= 0 && <div className="mt-0.5 text-[11px] text-gray-500">Dùng {Math.round(used * 10) / 10} kWh</div>}
+                    <input type="number" step="0.1" min="0" inputMode="decimal" data-room={r.id} value={f.elecNew} placeholder="Nhập số mới" onChange={(e) => setF(r.id, { elecNew: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} ${used !== null && used < 0 ? "border-red-500 bg-red-50" : warn ? "border-amber-500 bg-amber-50" : ""}`} />
+                    {used !== null && used >= 0 && <div className="mt-0.5 text-[10px] leading-tight text-gray-500">Dùng {Math.round(used * 10) / 10} kWh</div>}
                     {warn && <div className={`mt-0.5 text-[11px] ${used! < 0 ? "text-red-700" : "text-amber-700"}`}>⚠ {warn}</div>}
                   </td>
                 );
               })}
             </Row>
-            <Row label="Tiền điện" calc tot={T(thu.dien)}>{rooms.map((r) => { const f = forms[r.id]; const c = calc(r); return <td key={r.id} className={`${cell} text-right`}>{num(f.elecNew) === null ? <span className="text-gray-400">—</span> : vnd(c.elec)}<div className="text-[11px] text-gray-400">{vnd(r.input.elecPrice)}/kWh</div></td>; })}</Row>
+            <Row label="Tiền điện" calc tot={T(thu.dien)}>{rooms.map((r) => { const f = forms[r.id]; const c = calc(r); return <td key={r.id} className={`${cell} text-right`}>{num(f.elecNew) === null ? <span className="text-gray-400">—</span> : vnd(c.elec)}<div className="text-[10px] leading-tight text-gray-400">{vnd(r.input.elecPrice)}/kWh</div></td>; })}</Row>
             {waterMode === "meter" ? (
               <>
                 <Row label="Nước cũ" tot={tN(sumBy((r) => num(forms[r.id].waterOld) ?? 0))}>{rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="waterOld" setF={setF} commit={commit} onKey={onKey} step="0.1" />)}</Row>
@@ -360,8 +361,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                     const used = n === null ? null : n - o;
                     return (
                       <td key={r.id} className={cell}>
-                        <input type="number" step="0.1" min="0" inputMode="decimal" data-room={r.id} value={f.waterNew} placeholder="Nhập số mới" onChange={(e) => setF(r.id, { waterNew: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} ${used !== null && used < 0 ? "border-red-500 bg-red-50" : ""}`} />
-                        {used !== null && used >= 0 && <div className="mt-0.5 text-[11px] text-gray-500">Dùng {Math.round(used * 10) / 10} m³</div>}
+                        <input type="number" step="0.1" min="0" inputMode="decimal" data-room={r.id} value={f.waterNew} placeholder="Nhập số mới" onChange={(e) => setF(r.id, { waterNew: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} ${used !== null && used < 0 ? "border-red-500 bg-red-50" : ""}`} />
+                        {used !== null && used >= 0 && <div className="mt-0.5 text-[10px] leading-tight text-gray-500">Dùng {Math.round(used * 10) / 10} m³</div>}
                         {used !== null && used < 0 && <div className="mt-0.5 text-[11px] text-red-700">⚠ Nhỏ hơn số cũ</div>}
                       </td>
                     );
@@ -369,7 +370,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 </Row>
               </>
             ) : null}
-            <Row label="Tiền nước" calc tot={T(thu.nuoc)}>{rooms.map((r) => { const c = calc(r); const f = forms[r.id]; return <td key={r.id} className={`${cell} text-right`}>{waterMode === "meter" && num(f.waterNew) === null ? <span className="text-gray-400">—</span> : vnd(c.water)}<div className="text-[11px] text-gray-400">{waterMode === "person" ? `${vnd(r.input.waterPrice)}/người` : `${vnd(r.input.waterPrice)}/m³`}</div></td>; })}</Row>
+            <Row label="Tiền nước" calc tot={T(thu.nuoc)}>{rooms.map((r) => { const c = calc(r); const f = forms[r.id]; return <td key={r.id} className={`${cell} text-right`}>{waterMode === "meter" && num(f.waterNew) === null ? <span className="text-gray-400">—</span> : vnd(c.water)}<div className="text-[10px] leading-tight text-gray-400">{waterMode === "person" ? `${vnd(r.input.waterPrice)}/người` : `${vnd(r.input.waterPrice)}/m³`}</div></td>; })}</Row>
             {services.map((s) => (
               <Row key={s.id} label={s.roomId ? `${s.name} (P.${rooms.find((x) => x.id === s.roomId)?.code ?? ""})` : s.name} tot={T(sumBy((r) => lineSum(r, s.name)))}>
                 {rooms.map((r) => {
@@ -379,8 +380,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                   if (sv.off) return <td key={r.id} className={`${cell} text-center text-xs text-gray-400`}>Không thu</td>;
                   return (
                     <td key={r.id} className={cell}>
-                      <input type="number" min="0" inputMode="numeric" data-room={r.id} value={f.svc[s.id] ?? ""} placeholder={String(auto)} onChange={(e) => setF(r.id, { svc: { ...f.svc, [s.id]: e.target.value } })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} text-right`} />
-                      <div className="mt-0.5 text-right text-[11px] text-gray-400">{sv.type === "room" ? "theo phòng" : `${vnd(sv.unit)}${svcUnitLabel(sv)}`}</div>
+                      <input type="number" min="0" inputMode="numeric" data-room={r.id} value={f.svc[s.id] ?? ""} placeholder={String(auto)} onChange={(e) => setF(r.id, { svc: { ...f.svc, [s.id]: e.target.value } })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-right`} />
+                      <div className="mt-0.5 text-right text-[10px] leading-tight text-gray-400">{sv.type === "room" ? "theo phòng" : `${vnd(sv.unit)}${svcUnitLabel(sv)}`}</div>
                     </td>
                   );
                 })}
@@ -396,8 +397,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                     <div className="space-y-1">
                       {f.extras.map((e, i) => (
                         <div key={i} className="flex items-center gap-1">
-                          <input data-room={r.id} value={e.name} placeholder="Tên khoản" onChange={(ev) => setExtras(f.extras.map((x, j) => (j === i ? { ...x, name: ev.target.value } : x)))} onBlur={() => commit(r.id)} onKeyDown={(ev) => onKey(ev, r.id)} className={`${inp} min-w-0 flex-1`} />
-                          <input data-room={r.id} type="number" value={e.amount} placeholder="Tiền" onChange={(ev) => setExtras(f.extras.map((x, j) => (j === i ? { ...x, amount: ev.target.value } : x)))} onBlur={() => commit(r.id)} onKeyDown={(ev) => onKey(ev, r.id)} className={`${inp} w-24 text-right`} />
+                          <input data-room={r.id} value={e.name} placeholder="Tên khoản" onChange={(ev) => setExtras(f.extras.map((x, j) => (j === i ? { ...x, name: ev.target.value } : x)))} onBlur={() => commit(r.id)} onKeyDown={(ev) => onKey(ev, r.id)} className={`${inpT} min-w-0 flex-1`} />
+                          <input data-room={r.id} type="number" value={e.amount} placeholder="Tiền" onChange={(ev) => setExtras(f.extras.map((x, j) => (j === i ? { ...x, amount: ev.target.value } : x)))} onBlur={() => commit(r.id)} onKeyDown={(ev) => onKey(ev, r.id)} className={`${inpT} w-24 text-right`} />
                           <button type="button" aria-label="Xóa khoản" onClick={() => setExtras(f.extras.filter((_, j) => j !== i), true)} className="px-1 text-gray-400 hover:text-red-600">✕</button>
                         </div>
                       ))}
@@ -411,8 +412,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
             <Row label="Nợ cũ" tot={T(sumBy((r) => num(forms[r.id].debt) ?? 0))}>
               {rooms.map((r) => (
                 <td key={r.id} className={cell}>
-                  <input type="number" min="0" inputMode="numeric" data-room={r.id} value={forms[r.id].debt} placeholder="0" onChange={(e) => setF(r.id, { debt: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} text-right`} />
-                  {r.auto.debt > 0 && <div className="mt-0.5 text-right text-[11px] text-gray-400">kỳ trước còn {vnd(r.auto.debt)}</div>}
+                  <input type="number" min="0" inputMode="numeric" data-room={r.id} value={forms[r.id].debt} placeholder="0" onChange={(e) => setF(r.id, { debt: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-right`} />
+                  {r.auto.debt > 0 && <div className="mt-0.5 text-right text-[10px] leading-tight text-gray-400">kỳ trước còn {vnd(r.auto.debt)}</div>}
                 </td>
               ))}
             </Row>
@@ -472,7 +473,7 @@ function Row({ label, children, calc, strong, tot }: { label: string; children: 
     <tr className={calc ? "bg-gray-50/60" : ""}>
       <th className={`${labelCell} ${strong ? "text-gray-900" : ""}`}>{label}</th>
       {children}
-      <td className="whitespace-nowrap border-b border-l border-gray-100 bg-brand-50/70 px-2 py-1.5 text-right align-middle font-semibold">{tot ?? ""}</td>
+      <td className="whitespace-nowrap border-b border-l border-gray-100 bg-brand-50/70 px-1.5 py-0.5 text-right align-middle text-[13px] font-semibold">{tot ?? ""}</td>
     </tr>
   );
 }
@@ -486,7 +487,7 @@ function Num({ r, f, k, setF, commit, onKey, step, right, placeholder }: {
     <td className={cell}>
       <input type="number" min="0" step={step} inputMode="decimal" data-room={r.id} value={f[k]} placeholder={placeholder}
         onChange={(e) => setF(r.id, { [k]: e.target.value } as Partial<Form>)} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)}
-        className={`${inp} ${right ? "text-right" : ""}`} />
+        className={`${inpT} ${right ? "text-right" : ""}`} />
     </td>
   );
 }
