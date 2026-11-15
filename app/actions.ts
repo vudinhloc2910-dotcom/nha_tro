@@ -413,6 +413,19 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
   }
 }
 
+/** Lưu ghi chú riêng của một phòng trong một tháng (không đụng đến hóa đơn). */
+export async function saveRoomNote(roomId: number, month: string, note: string): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const room = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", Number(roomId), h.id);
+  if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+  const v = String(note ?? "").trim().slice(0, 300);
+  if (!v) await run("DELETE FROM room_month WHERE room_id=? AND month=? AND key='note'", room.id, month);
+  else await run("INSERT INTO room_month(room_id,month,key,value) VALUES (?,?,'note',?) ON CONFLICT(room_id,month,key) DO UPDATE SET value=excluded.value", room.id, month, v);
+  return { ok: true };
+}
+
 /* ---------- Ô "Sửa": thông tin cố định của phòng ---------- */
 export type RoomProfileInput = {
   roomId: number; month: string;
@@ -547,7 +560,7 @@ const catOf = (name: string) => {
 };
 
 /** Thay toàn bộ bảng "Chi phí phát sinh" của tháng. */
-export async function saveExpenseItems(month: string, items: { name: string; qty: string; unit: string }[]): Promise<{ ok: boolean; error?: string }> {
+export async function saveExpenseItems(month: string, items: { name: string; qty: string; unit: string; note?: string }[]): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
   const h = await currentHouse();
@@ -560,9 +573,9 @@ export async function saveExpenseItems(month: string, items: { name: string; qty
     if (!name || unit === null || Number.isNaN(unit) || Number.isNaN(qty)) continue;
     const amount = Math.round(qty * unit);
     if (!amount) continue;
-    st.push({ sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta) VALUES (?,?,'chi',?,?,?,'manual',?)", args: [h.id, month, catOf(name), name, amount, JSON.stringify({ qty, unit })] });
+    st.push({ sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta) VALUES (?,?,'chi',?,?,?,'manual',?)", args: [h.id, month, catOf(name), name, amount, JSON.stringify({ qty, unit, note: String(it.note ?? "").trim().slice(0, 200) })] });
     // Khoản đã ghim: cập nhật số tiền mới cho các tháng sau (chỉ khi sửa ở tháng mới nhất đã sửa)
-    st.push({ sql: "UPDATE pinned_expenses SET qty=?, unit=?, last_month=? WHERE house_id=? AND name=? AND ?>=last_month", args: [qty, unit, month, h.id, name, month] });
+    st.push({ sql: "UPDATE pinned_expenses SET qty=?, unit=?, note=?, last_month=? WHERE house_id=? AND name=? AND ?>=last_month", args: [qty, unit, String(it.note ?? "").trim().slice(0, 200), month, h.id, name, month] });
   }
   await batch(st);
   return { ok: true };
@@ -813,7 +826,7 @@ export async function addRoomService(f: FormData) {
 }
 
 /** Ghim một khoản chi hằng tháng: từ tháng sau trở đi, khoản này tự có sẵn trong bảng Chi phí phát sinh. */
-export async function pinExpense(month: string, item: { name: string; qty: string; unit: string }): Promise<{ ok: boolean; error?: string }> {
+export async function pinExpense(month: string, item: { name: string; qty: string; unit: string; note?: string }): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
   const h = await currentHouse();
@@ -822,7 +835,7 @@ export async function pinExpense(month: string, item: { name: string; qty: strin
   if (!name) return { ok: false, error: "Nhập tên khoản trước khi ghim" };
   if (unit === null || Number.isNaN(unit) || Number.isNaN(qty)) return { ok: false, error: "Nhập đơn giá trước khi ghim" };
   await batch([
-    { sql: "INSERT INTO pinned_expenses(house_id,name,category,qty,unit,from_month,last_month) VALUES (?,?,?,?,?,?,?) ON CONFLICT(house_id,name) DO UPDATE SET qty=excluded.qty, unit=excluded.unit, category=excluded.category, from_month=excluded.from_month, last_month=excluded.last_month", args: [h.id, name, catOf(name), qty, Math.round(unit), month, month] },
+    { sql: "INSERT INTO pinned_expenses(house_id,name,category,qty,unit,note,from_month,last_month) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(house_id,name) DO UPDATE SET qty=excluded.qty, unit=excluded.unit, note=excluded.note, category=excluded.category, from_month=excluded.from_month, last_month=excluded.last_month", args: [h.id, name, catOf(name), qty, Math.round(unit), String(item.note ?? "").trim().slice(0, 200), month, month] },
     // Tháng đang ghim đã có khoản này rồi, không thêm lần nữa
     { sql: "INSERT OR IGNORE INTO ledger_init(house_id, month) VALUES (?,?)", args: [h.id, month] },
   ]);

@@ -152,7 +152,7 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
  * Phiên bản cấu trúc database. Khi thêm bảng/cột mới trong init() thì TĂNG số này, để lần chạy đầu tiên nâng cấp một lần.
  * Các lần sau chỉ tốn 1 truy vấn kiểm tra (thay vì ~25 truy vấn mỗi lần khởi động máy chủ).
  */
-const SCHEMA_VERSION = "14";
+const SCHEMA_VERSION = "15";
 
 async function init() {
   const c = await getClient();
@@ -186,6 +186,9 @@ async function initFull(c: Client) {
   // Sổ thu chi: cột meta lưu thêm chi tiết (số lượng, đơn giá, phòng mới...)
   const lcols = await c.execute("SELECT name FROM pragma_table_info('ledger')");
   if (!lcols.rows.some((r) => r.name === "meta")) await c.execute("ALTER TABLE ledger ADD COLUMN meta TEXT NOT NULL DEFAULT ''");
+  // Ghi chú cho từng khoản chi hằng tháng đã ghim
+  const pcols = await c.execute("SELECT name FROM pragma_table_info('pinned_expenses')");
+  if (!pcols.rows.some((r) => r.name === "note")) await c.execute("ALTER TABLE pinned_expenses ADD COLUMN note TEXT NOT NULL DEFAULT ''");
   // Hợp đồng và tạm trú của khách thuê
   const tcols = await c.execute("SELECT name FROM pragma_table_info('tenants')");
   for (const [col, ddl] of [["contract_end", "TEXT DEFAULT ''"], ["residence_done", "INTEGER NOT NULL DEFAULT 0"]] as const) {

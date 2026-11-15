@@ -4,6 +4,8 @@ import { prevMonth } from "./format";
 
 export type RoomView = {
   id: number; code: string; rent: number; dueDay: number; note: string;
+  /** Ghi chú riêng của phòng trong tháng này */
+  monthNote: string;
   tenantId: number; tenantName: string; phone: string; tenantPeople: number;
   /** Giá riêng của phòng (null = dùng giá chung của nhà) */
   prefs: { elecPrice: number | null; waterPrice: number | null; svc: Record<number, { unit: number | null; off: boolean }> };
@@ -110,7 +112,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       periodStart, periodEnd,
     };
     out.rooms.push({
-      id: r.id, code: r.code, rent: r.rent, dueDay: r.due_day, note: r.note ?? "",
+      id: r.id, code: r.code, rent: r.rent, dueDay: r.due_day, note: r.note ?? "", monthNote: mo.get("note") ?? "",
       tenantId: Number(r.tid), tenantName: r.tname ?? "", phone: r.phone ?? "", tenantPeople: r.people ?? 1,
       prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), svc: svcPrefs },
       input, auto: { debt: debtAuto, periodStart: autoStart, periodEnd: autoEnd },

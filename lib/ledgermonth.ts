@@ -2,7 +2,7 @@ import { batchRows, mergeSettings, type House } from "./db";
 import { currentMonth } from "./format";
 import { parsePartners, type Partner } from "./report";
 
-export type ExpenseItem = { name: string; qty: number; unit: number };
+export type ExpenseItem = { name: string; qty: number; unit: number; note: string };
 export type NewRoomRow = { room: string; rent: number; people: number; phone: string; total: number; note: string };
 export type LedgerMonth = {
   items: ExpenseItem[]; newRooms: NewRoomRow[];
@@ -25,7 +25,7 @@ export async function loadLedgerMonth(houseId: number, month: string): Promise<L
     ? [
         {
           sql: `INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta)
-                SELECT p.house_id, ?, 'chi', p.category, p.name, CAST(ROUND(p.qty*p.unit) AS INTEGER), 'pin', json_object('qty', p.qty, 'unit', p.unit)
+                SELECT p.house_id, ?, 'chi', p.category, p.name, CAST(ROUND(p.qty*p.unit) AS INTEGER), 'pin', json_object('qty', p.qty, 'unit', p.unit, 'note', p.note)
                 FROM pinned_expenses p
                 WHERE p.house_id=? AND p.from_month<=?
                   AND NOT EXISTS (SELECT 1 FROM ledger_init i WHERE i.house_id=p.house_id AND i.month=?)
@@ -51,8 +51,8 @@ export async function loadLedgerMonth(houseId: number, month: string): Promise<L
   const sum = (c: string) => rows.filter((r) => r.kind === "chi" && r.category === c).reduce((a, r) => a + r.amount, 0);
   return {
     items: rows.filter((r) => r.kind === "chi" && ["phat_sinh", "luong", "dau_tu"].includes(r.category)).map((r) => {
-      const m = parse<{ qty: number; unit: number }>(r.meta);
-      return { name: r.name, qty: m.qty ?? 1, unit: m.unit ?? r.amount };
+      const m = parse<{ qty: number; unit: number; note: string }>(r.meta);
+      return { name: r.name, qty: m.qty ?? 1, unit: m.unit ?? r.amount, note: m.note ?? "" };
     }),
     newRooms: rows.filter((r) => r.kind === "thu" && r.category === "phong_moi").map((r) => {
       const m = parse<NewRoomRow>(r.meta);

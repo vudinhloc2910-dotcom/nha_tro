@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { saveRoomMonth, saveRoomProfile, type RoomMonthInput, type SaveResult } from "./actions";
+import { saveRoomMonth, saveRoomNote, saveRoomProfile, type RoomMonthInput, type SaveResult } from "./actions";
 import { StatusBadge } from "./components";
 import { CopyButton } from "./copy-button";
 import { RoomEditor } from "./room-editor";
@@ -70,6 +70,29 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
   const [invs, setInvs] = useState<Record<number, Inv>>(() => Object.fromEntries(rooms.map((r) => [r.id, r.invoice])));
   const [status, setStatus] = useState<Record<number, St>>({});
   const [editing, setEditing] = useState<RoomView | null>(null);
+  // Ghi chú riêng của từng phòng trong tháng (lưu riêng, không làm tính lại hóa đơn)
+  const [notes, setNotes] = useState<Record<number, string>>(() => Object.fromEntries(rooms.map((r) => [r.id, r.monthNote])));
+  const notesSaved = useRef<Record<number, string>>(Object.fromEntries(rooms.map((r) => [r.id, r.monthNote])));
+  const [noteErr, setNoteErr] = useState<Record<number, string>>({});
+  async function commitNote(id: number) {
+    const v = (notes[id] ?? "").trim();
+    if (v === notesSaved.current[id]) return;
+    let ok = false;
+    try { ok = (await saveRoomNote(id, month, v)).ok; } catch { ok = false; }
+    if (ok) { notesSaved.current[id] = v; setNoteErr((p) => ({ ...p, [id]: "" })); }
+    else setNoteErr((p) => ({ ...p, [id]: "Chưa lưu được ghi chú" }));
+  }
+  const noteBox = (id: number, cls: string) => {
+    const has = (notes[id] ?? "").trim() !== "";
+    return (
+      <>
+        <textarea rows={2} data-room={id} value={notes[id] ?? ""} placeholder="Ghi chú (nếu có)" maxLength={300}
+          onChange={(e) => setNotes((p) => ({ ...p, [id]: e.target.value }))} onBlur={() => void commitNote(id)}
+          className={`${cls} resize-y rounded border px-1.5 py-1 text-[12px] leading-snug focus:outline-none focus:ring-1 focus:ring-brand-600 ${has ? "border-amber-300 bg-amber-50 font-semibold text-amber-900" : "border-gray-200 bg-white font-normal text-gray-400 placeholder:text-gray-300"}`} />
+        {noteErr[id] && <div className="text-[11px] text-red-700">{noteErr[id]}</div>}
+      </>
+    );
+  };
   const mm = month.slice(5);
   const [tab, setTab] = useState<"elec" | "water">("elec");
 
@@ -281,6 +304,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 </div>
               </details>
 
+              <div className="mt-2">{noteBox(r.id, "w-full")}</div>
               <div className={`mt-2 text-xs ${stt?.state === "error" ? "font-medium text-red-700" : stt?.state === "saving" ? "text-gray-500" : "text-green-700"}`}>{stt?.msg ?? (inv ? "" : "Chưa có hóa đơn: nhập số điện mới")}</div>
               {inv && !dirty(r) && (
                 <div className="mt-1 flex flex-wrap gap-2">
@@ -455,6 +479,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 );
               })}
             </Row>
+            <Row label="Ghi chú">{rooms.map((r) => <td key={r.id} className={cell}>{noteBox(r.id, "w-full")}</td>)}</Row>
           </tbody>
         </table>
       </div>

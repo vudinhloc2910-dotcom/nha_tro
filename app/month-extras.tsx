@@ -23,14 +23,14 @@ function MoneyInput({ value, onChange, placeholder }: { value: string; onChange:
   );
 }
 
-type Exp = { name: string; qty: string; unit: string };
+type Exp = { name: string; qty: string; unit: string; note: string };
 type NR = { room: string; rent: string; people: string; phone: string; total: string; note: string };
 export type LiveThu = { dien: number; nuoc: number; mang: number; dich_vu: number; tien_phong: number; phat_sinh: number };
 
 
 /** Ba bảng dưới bảng hóa đơn (giống cuối tab sheet): Chi phí phát sinh, Thu tiền phòng mới, Chi tiết lợi nhuận. */
 export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveThu; ledger: LedgerMonth }) {
-  const [items, setItems] = useState<Exp[]>(ledger.items.map((i) => ({ name: i.name, qty: String(i.qty), unit: String(i.unit) })));
+  const [items, setItems] = useState<Exp[]>(ledger.items.map((i) => ({ name: i.name, qty: String(i.qty), unit: String(i.unit), note: i.note })));
   const [rooms, setRooms] = useState<NR[]>(ledger.newRooms.map((r) => ({ room: r.room, rent: String(r.rent), people: String(r.people), phone: r.phone, total: String(r.total), note: r.note })));
   const [chi, setChi] = useState<Record<string, string>>({
     dien: ledger.chi.dien ? String(ledger.chi.dien) : "", nuoc: ledger.chi.nuoc ? String(ledger.chi.nuoc) : "", mang: ledger.chi.mang ? String(ledger.chi.mang) : "",
@@ -88,8 +88,8 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
         <section onBlur={exp.flush} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-center text-base font-bold tracking-wide">CHI PHÍ PHÁT SINH (#)</h2>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[26rem] border-collapse">
-              <thead><tr><th className={`${th} w-8`} /><th className={th}>Tên hạng mục</th><th className={`${th} w-16`}>Số lượng</th><th className={`${th} w-28`}>Đơn giá</th><th className={`${th} w-28 text-right`}>Thành tiền</th><th className={`${th} w-8`} /></tr></thead>
+            <table className="w-full min-w-[34rem] border-collapse">
+              <thead><tr><th className={`${th} w-8`} /><th className={th}>Tên hạng mục</th><th className={`${th} w-16`}>Số lượng</th><th className={`${th} w-28`}>Đơn giá</th><th className={`${th} w-28 text-right`}>Thành tiền</th><th className={`${th} w-44`}>Ghi chú</th><th className={`${th} w-8`} /></tr></thead>
               <tbody>
                 {items.map((it, i) => (
                   <tr key={i} className={pins.includes(it.name.trim()) && it.name.trim() ? "bg-amber-50" : ""}>
@@ -103,15 +103,16 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
                     <td className={td}><input className={`${inp} text-right`} type="number" min="0" inputMode="decimal" value={it.qty} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} /></td>
                     <td className={td}><MoneyInput value={it.unit} onChange={(v) => setItems(items.map((x, j) => (j === i ? { ...x, unit: v } : x)))} /></td>
                     <td className={`${td} text-right font-medium`}>{vnd(itemTotal(it))}</td>
+                    <td className={td}><input className={inp} value={it.note} placeholder="(nếu cần)" onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} /></td>
                     <td className={td}><button type="button" aria-label="Xóa dòng" onClick={() => setItems(items.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600">✕</button></td>
                   </tr>
                 ))}
-                <tr className="bg-yellow-100 font-bold"><td className={td} colSpan={4}>TỔNG</td><td className={`${td} text-right`}>{vnd(expTotal)}</td><td className={td} /></tr>
+                <tr className="bg-yellow-100 font-bold"><td className={td} colSpan={4}>TỔNG</td><td className={`${td} text-right`}>{vnd(expTotal)}</td><td className={td} colSpan={2} /></tr>
               </tbody>
             </table>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <button type="button" onClick={() => setItems([...items, { name: "", qty: "1", unit: "" }])} className="text-sm font-medium text-brand-700 hover:underline">+ Thêm dòng</button>
+            <button type="button" onClick={() => setItems([...items, { name: "", qty: "1", unit: "", note: "" }])} className="text-sm font-medium text-brand-700 hover:underline">+ Thêm dòng</button>
             <button type="button" onClick={exp.flush} className="rounded-xl border border-brand-300 bg-white px-4 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-50">Lưu ngay</button>
             <StatusText t={msg.exp} />
           </div>
