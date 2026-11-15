@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { all } from "@/lib/db";
+import { all, readAll } from "@/lib/db";
 import { currentHouse } from "@/lib/house";
 import { dateVN, today, vnd } from "@/lib/format";
-import { toggleResidence } from "../../actions";
+import { toggleResidence, type ResidentRow } from "../../actions";
+import { ResidentsTable } from "../../residents-table";
 import { accent, cardCls, tdCls, thCls } from "@/lib/ui";
 
 type T = {
@@ -19,6 +20,12 @@ export default async function TenantsPage() {
      FROM tenants t JOIN rooms r ON r.id=t.room_id WHERE r.house_id=? AND t.active=1 ORDER BY r.code`, house.id
   );
   rows.sort((a, b) => a.code.localeCompare(b.code, "vi", { numeric: true }));
+  const [resR, codeR] = await readAll([
+    { sql: "SELECT room_code room, name, cccd, gender, dob, phone, job, address, plate, vehicle, emergency FROM residents WHERE house_id=? ORDER BY sort, id", args: [house.id] },
+    { sql: "SELECT code FROM rooms WHERE house_id=? ORDER BY code", args: [house.id] },
+  ]);
+  const residents = resR as ResidentRow[];
+  const roomCodes = (codeR as { code: string }[]).map((r) => r.code).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
   const people = rows.reduce((a, r) => a + r.people, 0);
   const deposit = rows.reduce((a, r) => a + (r.deposit ?? 0), 0);
   const t0 = today();
@@ -67,6 +74,8 @@ export default async function TenantsPage() {
           </table>
         )}
       </section>
+
+      <ResidentsTable key={JSON.stringify(residents).length + "-" + residents.length} initial={residents} roomCodes={roomCodes} />
     </div>
   );
 }

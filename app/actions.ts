@@ -834,3 +834,24 @@ export async function unpinExpense(name: string): Promise<{ ok: boolean; error?:
   await run("DELETE FROM pinned_expenses WHERE house_id=? AND name=?", h.id, String(name ?? "").trim());
   return { ok: true };
 }
+
+/* ---------- Danh sách người ở (từng người trong phòng) ---------- */
+export type ResidentRow = {
+  room: string; name: string; cccd: string; gender: string; dob: string; phone: string;
+  job: string; address: string; plate: string; vehicle: string; emergency: string;
+};
+/** Lưu toàn bộ danh sách người ở của nhà đang chọn (thay thế danh sách cũ, trong một lượt ghi). */
+export async function saveResidents(rows: ResidentRow[]): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!Array.isArray(rows) || rows.length > 400) return { ok: false, error: "Tối đa 400 người mỗi nhà" };
+  const h = await currentHouse();
+  const t = (v: unknown, n: number) => String(v ?? "").trim().slice(0, n);
+  const st: { sql: string; args: (string | number)[] }[] = [{ sql: "DELETE FROM residents WHERE house_id=?", args: [h.id] }];
+  rows.forEach((r, i) => {
+    const row = [t(r.room, 30), t(r.name, 80), t(r.cccd, 20), r.gender === "Nam" || r.gender === "Nữ" ? r.gender : "", t(r.dob, 20), t(r.phone, 20), t(r.job, 60), t(r.address, 200), t(r.plate, 30), t(r.vehicle, 60), t(r.emergency, 80)];
+    if (row.every((x) => x === "")) return; // bỏ dòng trống
+    st.push({ sql: "INSERT INTO residents(house_id, sort, room_code, name, cccd, gender, dob, phone, job, address, plate, vehicle, emergency) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", args: [h.id, i, ...row] });
+  });
+  await batch(st);
+  return { ok: true };
+}
