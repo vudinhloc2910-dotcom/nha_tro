@@ -11,8 +11,11 @@ export function dateVN(d: string) {
   return `${day}/${m}/${y}`;
 }
 export type Status = "paid" | "partial" | "unpaid" | "overdue";
-export function statusOf(total: number, paid: number, due: string): Status {
+/** Trạng thái hóa đơn. `state` là trạng thái chủ trọ đặt tay ("unpaid" = chưa thu, "overdue" = quá hạn); đã thu đủ thì luôn là "paid". */
+export function statusOf(total: number, paid: number, due: string, state = ""): Status {
   if (paid >= total) return "paid";
+  if (state === "overdue") return "overdue";
+  if (state === "unpaid") return paid > 0 ? "partial" : "unpaid";
   if (due < today()) return "overdue";
   return paid > 0 ? "partial" : "unpaid";
 }

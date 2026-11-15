@@ -6,7 +6,7 @@ import { reportIssue } from "../../actions";
 
 export const metadata = { title: "Hóa đơn tiền trọ", robots: { index: false, follow: false } };
 
-type Inv = { id: number; house_id: number; code: string; month: string; tenant_name: string; people: number; total: number; due_date: string; period_start: string | null };
+type Inv = { id: number; house_id: number; code: string; month: string; tenant_name: string; people: number; total: number; due_date: string; period_start: string | null; state?: string };
 
 export default async function PayPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ issue?: string }> }) {
   const { token } = await params;
@@ -25,7 +25,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   const payments = paymentsR as { amount: number; paid_at: string; method: string }[];
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remain = Math.max(0, inv.total - paid);
-  const status = statusOf(inv.total, paid, inv.due_date);
+  const status = statusOf(inv.total, paid, inv.due_date, inv.state ?? "");
   const note = `Phong ${inv.code}`;
   const invNo = `HD-${inv.month.replace("-", "")}-${inv.code}`;
   const qr = s.bank_account

@@ -7,7 +7,7 @@ import { Flash, StatusBadge } from "../../../components";
 import { PrintButton } from "../../../print-button";
 import { btnCls, btnDangerCls, btnGhostCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
 
-type Inv = { id: number; room_id: number; code: string; month: string; tenant_name: string; total: number; due_date: string; token: string; locked: number };
+type Inv = { id: number; room_id: number; code: string; month: string; tenant_name: string; total: number; due_date: string; token: string; locked: number; state: string };
 
 export default async function InvoicePage({
   params, searchParams,
@@ -25,7 +25,7 @@ export default async function InvoicePage({
   );
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remain = Math.max(0, inv.total - paid);
-  const status = statusOf(inv.total, paid, inv.due_date);
+  const status = statusOf(inv.total, paid, inv.due_date, inv.state);
 
   return (
     <div className="space-y-5">

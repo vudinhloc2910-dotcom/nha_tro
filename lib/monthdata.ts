@@ -10,7 +10,7 @@ export type RoomView = {
   input: RoomInput;
   /** Giá trị tự động (để hiện làm gợi ý khi chủ trọ chưa đặt tay) */
   auto: { debt: number; periodStart: string; periodEnd: string };
-  invoice: { id: number; token: string; total: number; paid: number; locked: boolean; due: string; lines: { label: string; detail: string; amount: number }[] } | null;
+  invoice: { id: number; token: string; total: number; paid: number; locked: boolean; due: string; state: string; lines: { label: string; detail: string; amount: number }[] } | null;
   prevUsage: { e: number; w: number } | null;
   hasReading: boolean;
   /** Số điện, nước đầu vào (số cũ của tháng đầu tiên khi phòng chưa có chỉ số) */
@@ -38,7 +38,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     { sql: "SELECT m.room_id, m.key, m.value FROM room_month m JOIN rooms r ON r.id=m.room_id WHERE m.month=? AND r.house_id=?", args: [month, houseId] },
     { sql: "SELECT d.room_id, d.month, d.elec_old, d.elec_new, d.water_old, d.water_new FROM readings d JOIN rooms r ON r.id=d.room_id WHERE d.month IN (?,?) AND r.house_id=?", args: [month, pm, houseId] },
     { sql: "SELECT e.room_id, e.name, e.amount FROM extras e JOIN rooms r ON r.id=e.room_id WHERE e.month=? AND r.house_id=? ORDER BY e.id", args: [month, houseId] },
-    { sql: `SELECT i.id, i.room_id, i.token, i.total, i.due_date, i.period_start, i.locked,
+    { sql: `SELECT i.id, i.room_id, i.token, i.total, i.due_date, i.period_start, i.locked, i.state,
               COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.month=? AND r.house_id=?`, args: [month, houseId] },
     { sql: `SELECT l.invoice_id, l.label, l.detail, l.amount FROM invoice_lines l JOIN invoices i ON i.id=l.invoice_id
@@ -63,7 +63,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
   type Rd = { room_id: number; month: string; elec_old: number; elec_new: number; water_old: number; water_new: number };
   const readingsT = readings as unknown as Rd[];
   const extrasT = extras as unknown as { room_id: number; name: string; amount: number }[];
-  const invoicesT = invoices as unknown as { id: number; room_id: number; token: string; total: number; due_date: string; period_start: string | null; locked: number; paid: number }[];
+  const invoicesT = invoices as unknown as { id: number; room_id: number; token: string; total: number; due_date: string; period_start: string | null; locked: number; state: string; paid: number }[];
   const prevInvT = prevInv as unknown as { room_id: number; total: number; due_date: string; paid: number }[];
 
   const by = <T extends { room_id: number }>(list: T[], id: number) => list.filter((x) => x.room_id === id);
@@ -114,7 +114,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       tenantId: Number(r.tid), tenantName: r.tname ?? "", phone: r.phone ?? "", tenantPeople: r.people ?? 1,
       prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), svc: svcPrefs },
       input, auto: { debt: debtAuto, periodStart: autoStart, periodEnd: autoEnd },
-      invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: inv.due_date, lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
+      invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: inv.due_date, state: inv.state ?? "", lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
       prevUsage: prev ? { e: Math.max(0, prev.elec_new - prev.elec_old), w: Math.max(0, prev.water_new - prev.water_old) } : null,
       hasReading: !!cur, start: { elec: r.elec_start ?? 0, water: r.water_start ?? 0 },
     });

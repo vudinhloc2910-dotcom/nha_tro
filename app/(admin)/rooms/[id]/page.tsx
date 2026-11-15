@@ -12,7 +12,7 @@ import { accent, btnCls, btnDangerCls, cardCls, inputCls, labelCls, tdCls, thCls
 type Room = { id: number; house_id: number; code: string; rent: number; due_day: number; note: string; floor_label: string; kind: string };
 type Tenant = { name: string; phone: string; people: number; move_in: string; deposit: number; contract_end: string | null; residence_done: number };
 type Vehicle = { id: number; kind: string; plate: string; note: string };
-type Inv = { id: number; month: string; total: number; due_date: string; locked: number; paid: number };
+type Inv = { id: number; month: string; total: number; due_date: string; locked: number; state: string; paid: number };
 type Rd = { month: string; elec_old: number; elec_new: number; water_old: number; water_new: number };
 
 const TABS = [["info", "Thông tin chung"], ["price", "Giá và phí"], ["history", "Lịch sử"]] as const;
@@ -30,7 +30,7 @@ export default async function RoomPage({
     { sql: "SELECT * FROM rooms WHERE id=?", args: [rid] },
     { sql: "SELECT * FROM tenants WHERE room_id=? AND active=1", args: [rid] },
     { sql: "SELECT name, move_in, move_out FROM tenants WHERE room_id=? AND active=0 ORDER BY id DESC", args: [rid] },
-    { sql: `SELECT i.id, i.month, i.total, i.due_date, i.locked, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
+    { sql: `SELECT i.id, i.month, i.total, i.due_date, i.locked, i.state, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i WHERE i.room_id=? ORDER BY i.month DESC`, args: [rid] },
     { sql: "SELECT id, kind, plate, note FROM vehicles WHERE room_id=? ORDER BY id", args: [rid] },
   ]);
@@ -260,7 +260,7 @@ async function History({ roomId, invoices }: { roomId: number; invoices: Inv[] }
                   <td className={tdCls}>{dateVN(i.due_date)}</td>
                   <td className={`${tdCls} text-right`}>{vnd(i.total)}</td>
                   <td className={`${tdCls} text-right`}>{vnd(i.paid)}</td>
-                  <td className={tdCls}><StatusBadge status={statusOf(i.total, i.paid, i.due_date)} /></td>
+                  <td className={tdCls}><StatusBadge status={statusOf(i.total, i.paid, i.due_date, i.state)} /></td>
                 </tr>
               ))}
             </tbody>

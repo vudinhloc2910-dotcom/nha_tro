@@ -4,7 +4,7 @@ import { computeInvoice } from "./calc";
 import { loadMonth, type RoomView } from "./monthdata";
 
 type Stmt = { sql: string; args: (string | number | null)[] };
-export type SavedInvoice = { id: number; token: string; total: number; paid: number; due: string; locked: boolean };
+export type SavedInvoice = { id: number; token: string; total: number; paid: number; due: string; locked: boolean; state: string };
 
 const WHERE_INV = "(SELECT id FROM invoices WHERE room_id=? AND month=?)";
 
@@ -40,13 +40,13 @@ export async function saveInvoice(view: RoomView, month: string, opts: { force?:
   // Hóa đơn đã khóa (nhập từ sheet) thì giữ nguyên, trừ khi chủ trọ chủ động sửa (force)
   if (view.invoice?.locked && !opts.force) {
     const v = view.invoice;
-    return { id: v.id, token: v.token, total: v.total, paid: v.paid, due: v.due, locked: true };
+    return { id: v.id, token: v.token, total: v.total, paid: v.paid, due: v.due, locked: true, state: v.state };
   }
   const st = invoiceStmts(view, month, opts.houseId);
   st.push({ sql: "SELECT id, token FROM invoices WHERE room_id=? AND month=?", args: [view.id, month] });
   const res = await batchRows(st);
   const row = res[res.length - 1][0] as { id: number; token: string };
-  return { id: Number(row.id), token: row.token, total: computeInvoice(view.input).total, paid: view.invoice?.paid ?? 0, due: view.input.periodEnd, locked: false };
+  return { id: Number(row.id), token: row.token, total: computeInvoice(view.input).total, paid: view.invoice?.paid ?? 0, due: view.input.periodEnd, locked: false, state: view.invoice?.state ?? "" };
 }
 
 /** Tạo hoặc tính lại hóa đơn của 1 phòng trong 1 tháng. */

@@ -152,7 +152,7 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
  * Phiên bản cấu trúc database. Khi thêm bảng/cột mới trong init() thì TĂNG số này, để lần chạy đầu tiên nâng cấp một lần.
  * Các lần sau chỉ tốn 1 truy vấn kiểm tra (thay vì ~25 truy vấn mỗi lần khởi động máy chủ).
  */
-const SCHEMA_VERSION = "13";
+const SCHEMA_VERSION = "14";
 
 async function init() {
   const c = await getClient();
@@ -191,6 +191,8 @@ async function initFull(c: Client) {
   for (const [col, ddl] of [["contract_end", "TEXT DEFAULT ''"], ["residence_done", "INTEGER NOT NULL DEFAULT 0"]] as const) {
     if (!tcols.rows.some((r) => r.name === col)) await c.execute(`ALTER TABLE tenants ADD COLUMN ${col} ${ddl}`);
   }
+  // Trạng thái đặt tay trên danh sách hóa đơn: '' = tự tính, 'unpaid' = chưa thu, 'overdue' = quá hạn
+  if (!cols.rows.some((r) => r.name === "state")) await c.execute("ALTER TABLE invoices ADD COLUMN state TEXT NOT NULL DEFAULT ''");
   // Kỳ hạn thuê của hóa đơn (ngày bắt đầu; ngày kết thúc chính là hạn đóng due_date)
   if (!cols.rows.some((r) => r.name === "period_start")) {
     await c.execute("ALTER TABLE invoices ADD COLUMN period_start TEXT");

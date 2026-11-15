@@ -3,7 +3,7 @@ import { statusOf, type Status } from "./format";
 
 export type InvoiceRow = {
   id: number; room_id: number; code: string; month: string; tenant_name: string; people: number;
-  prev_debt: number; total: number; due_date: string; token: string; paid: number; status: Status; has_reading: number; locked: number;
+  prev_debt: number; total: number; due_date: string; state: string; token: string; paid: number; status: Status; has_reading: number; locked: number;
 };
 
 export async function invoicesOfMonth(houseId: number, month: string): Promise<InvoiceRow[]> {
@@ -14,7 +14,7 @@ export async function invoicesOfMonth(houseId: number, month: string): Promise<I
      FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE r.house_id=? AND i.month=? ORDER BY r.code`,
     houseId, month
   );
-  return rows.map((r) => ({ ...r, status: statusOf(r.total, r.paid, r.due_date) }));
+  return rows.map((r) => ({ ...r, status: statusOf(r.total, r.paid, r.due_date, r.state) }));
 }
 
 export async function allInvoices(houseId: number): Promise<InvoiceRow[]> {
@@ -25,5 +25,5 @@ export async function allInvoices(houseId: number): Promise<InvoiceRow[]> {
      FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE r.house_id=? ORDER BY i.month DESC, r.code`,
     houseId
   );
-  return rows.map((r) => ({ ...r, status: statusOf(r.total, r.paid, r.due_date) }));
+  return rows.map((r) => ({ ...r, status: statusOf(r.total, r.paid, r.due_date, r.state) }));
 }

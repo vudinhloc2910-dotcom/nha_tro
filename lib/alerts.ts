@@ -16,7 +16,7 @@ export async function loadAlerts() {
               COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i JOIN rooms r ON r.id=i.room_id JOIN houses h ON h.id=r.house_id
             LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1
-            WHERE i.due_date < ?`, args: [t0] },
+            WHERE (i.due_date < ? AND i.state<>'unpaid') OR i.state='overdue'`, args: [t0] },
     { sql: `SELECT h.name house, r.id roomId, r.code, t.name tenant, t.phone, t.contract_end end, t.move_in, t.residence_done residence
             FROM tenants t JOIN rooms r ON r.id=t.room_id JOIN houses h ON h.id=r.house_id WHERE t.active=1`, args: [] },
     { sql: `SELECT h.name house, r.id roomId, r.code, r.rent,
@@ -30,7 +30,7 @@ export async function loadAlerts() {
     const remain = i.total - i.paid;
     if (remain <= 0 || !i.tenant) continue;
     const cur = byRoom.get(i.roomId);
-    const days = daysBetween(i.due, t0);
+    const days = Math.max(0, daysBetween(i.due, t0));
     // Mỗi phòng gom nợ quá hạn; hiển thị tháng/link của hóa đơn quá hạn mới nhất
     if (!cur) byRoom.set(i.roomId, { house: i.house, houseId: i.houseId, roomId: i.roomId, code: i.code, tenant: i.tenant, phone: i.phone ?? "", amount: remain, days, month: i.month, token: i.token });
     else { cur.amount += remain; if (i.month > cur.month) { cur.month = i.month; cur.token = i.token; cur.days = days; } }

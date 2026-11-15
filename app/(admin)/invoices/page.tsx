@@ -4,7 +4,8 @@ import { invoicesOfMonth } from "@/lib/queries";
 import { currentHouse } from "@/lib/house";
 import { currentMonth, dateVN, monthLabel, vnd } from "@/lib/format";
 import { generateInvoices } from "../../actions";
-import { Flash, StatusBadge } from "../../components";
+import { Flash } from "../../components";
+import StatusSelect from "../../status-select";
 import { btnCls, cardCls, tdCls, thCls } from "@/lib/ui";
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ month?: string; ok?: string; err?: string }> }) {
@@ -37,7 +38,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   <td className={tdCls}>{dateVN(i.due_date)}</td>
                   <td className={`${tdCls} text-right`}>{vnd(i.total)}</td>
                   <td className={`${tdCls} text-right`}>{vnd(i.paid)}</td>
-                  <td className={tdCls}><StatusBadge status={i.status} /></td>
+                  <td className={tdCls}><StatusSelect key={`${i.id}-${i.status}-${i.paid}`} invoiceId={i.id} status={i.status} paid={i.paid} /></td>
                 </tr>
               ))}
             </tbody>

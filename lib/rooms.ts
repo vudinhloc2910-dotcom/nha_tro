@@ -35,16 +35,16 @@ export async function roomTiles(houseId: number): Promise<RoomTile[]> {
     { sql: `SELECT r.id, r.code, r.rent, r.floor_label, r.kind, t.name tname, t.phone, t.people,
               (SELECT MAX(x.move_out) FROM tenants x WHERE x.room_id=r.id AND x.active=0) last_out
             FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`, args: [houseId] },
-    { sql: `SELECT i.room_id, i.total, i.due_date, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
+    { sql: `SELECT i.room_id, i.total, i.due_date, i.state, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE r.house_id=?`, args: [houseId] },
   ]);
   const rooms = roomsR as { id: number; code: string; rent: number; floor_label: string; kind: string; tname: string | null; phone: string | null; people: number | null; last_out: string | null }[];
-  const inv = invR as { room_id: number; total: number; due_date: string; paid: number }[];
+  const inv = invR as { room_id: number; total: number; due_date: string; state: string; paid: number }[];
   const t0 = today();
   const out: RoomTile[] = rooms.map((r) => {
     const mine = inv.filter((i) => i.room_id === r.id && i.total - i.paid > 0);
     const debt = mine.reduce((a, i) => a + (i.total - i.paid), 0);
-    const late = mine.some((i) => i.due_date < t0);
+    const late = mine.some((i) => i.state === "overdue" || (i.state !== "unpaid" && i.due_date < t0));
     const f = r.floor_label ? { n: floorOrder(r.floor_label), label: r.floor_label } : floorOf(r.code);
     const vacant = r.tname === null;
     let vacantDays: number | null = null;

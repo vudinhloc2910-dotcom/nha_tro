@@ -19,7 +19,7 @@ type Form = {
   elecOld: string; elecNew: string; waterOld: string; waterNew: string;
   svc: Record<number, string>; extras: { name: string; amount: string }[]; discount: string; debt: string;
 };
-type Inv = { id: number; token: string; total: number; paid: number; due: string; locked: boolean; lines?: { label: string; detail: string; amount: number }[] } | null;
+type Inv = { id: number; token: string; total: number; paid: number; due: string; locked: boolean; state?: string; lines?: { label: string; detail: string; amount: number }[] } | null;
 type St = { state: "idle" | "saving" | "saved" | "error"; msg: string };
 
 const s2 = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
@@ -198,7 +198,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
         {rooms.map((r) => {
           const f = forms[r.id];
           const inv = invs[r.id];
-          const st = inv ? statusOf(inv.total, inv.paid, inv.due) : null;
+          const st = inv ? statusOf(inv.total, inv.paid, inv.due, inv.state ?? "") : null;
           const c = calc(r);
           const total = inv && !dirty(r) ? inv.total : c.total;
           const remain = Math.max(0, total - (inv?.paid ?? 0));
@@ -302,7 +302,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
               <th className="sticky left-0 top-0 z-30 w-28 min-w-[7rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] font-semibold uppercase leading-tight text-gray-600">{houseName}</th>
               {rooms.map((r) => {
                 const inv = invs[r.id];
-                const st = inv ? statusOf(inv.total, inv.paid, inv.due) : null;
+                const st = inv ? statusOf(inv.total, inv.paid, inv.due, inv.state ?? "") : null;
                 return (
                   <th key={r.id} className="sticky top-0 z-20 min-w-[8.75rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-left align-top shadow-[0_1px_0_0_#e5e7eb]">
                     <div className="flex items-center justify-between gap-2">

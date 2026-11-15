@@ -305,6 +305,7 @@ export async function addPayment(f: FormData) {
   if (amount <= 0) back(`/invoices/${invId}`, { err: "Số tiền thu phải lớn hơn 0" });
   const method = str(f, "method") === "cash" ? "cash" : "bank";
   await run("INSERT INTO payments(invoice_id,amount,method,paid_at,note) VALUES (?,?,?,?,?)", invId, amount, method, str(f, "paid_at") || today(), str(f, "note"));
+  await run("UPDATE invoices SET state='' WHERE id=?", invId); // đã có tiền vào thì trạng thái tính lại tự động
   const pinfo = await one<{ house_id: number; code: string; room_id: number; month: string }>("SELECT r.house_id, r.code, r.id room_id, i.month FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.id=?", invId);
   if (pinfo) await logActivity(pinfo.house_id, "payment", `Phòng ${pinfo.code} đã đóng ${amount.toLocaleString("vi-VN")}đ (hóa đơn T${pinfo.month.slice(5)})`, pinfo.room_id);
   refresh();
@@ -327,7 +328,7 @@ export type RoomMonthInput = {
   discount: string; debt: string;
 };
 export type SaveResult =
-  | { ok: true; invoice: { id: number; token: string; total: number; paid: number; due: string; locked: boolean } | null }
+  | { ok: true; invoice: { id: number; token: string; total: number; paid: number; due: string; locked: boolean; state?: string } | null }
   | { ok: false; error: string };
 
 const toNum = (v: string | undefined) => {
@@ -854,4 +855,35 @@ export async function saveResidents(rows: ResidentRow[]): Promise<{ ok: boolean;
   });
   await batch(st);
   return { ok: true };
+}
+
+/**
+ * Đổi nhanh trạng thái một hóa đơn trong Danh sách hóa đơn:
+ * - "paid": ghi nhận thu nốt phần còn lại.
+ * - "unpaid" / "overdue": xóa các khoản đã thu của hóa đơn rồi đặt trạng thái Chưa thu hoặc Quá hạn.
+ * Trạng thái mới được dùng ở mọi nơi (Hóa đơn tháng, Tổng quan, Sơ đồ phòng, trang khách xem).
+ */
+export async function setInvoiceStatus(invoiceId: number, target: "paid" | "unpaid" | "overdue"): Promise<{ ok: boolean; error?: string; status?: string }> {
+  await requireAdmin();
+  const h = await currentHouse();
+  const inv = await one<{ id: number; total: number; room_id: number; month: string; code: string }>(
+    "SELECT i.id, i.total, i.room_id, i.month, r.code FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.id=? AND r.house_id=?", Number(invoiceId), h.id
+  );
+  if (!inv) return { ok: false, error: "Không tìm thấy hóa đơn" };
+  const paid = Number((await one<{ p: number }>("SELECT COALESCE(SUM(amount),0) p FROM payments WHERE invoice_id=?", inv.id))?.p ?? 0);
+  if (target === "paid") {
+    const remain = inv.total - paid;
+    const st: { sql: string; args: (string | number)[] }[] = [];
+    if (remain > 0) st.push({ sql: "INSERT INTO payments(invoice_id,amount,method,paid_at,note) VALUES (?,?,?,?,?)", args: [inv.id, remain, "bank", today(), "Cập nhật nhanh: đã thu"] });
+    st.push({ sql: "UPDATE invoices SET state='' WHERE id=?", args: [inv.id] });
+    await batch(st);
+    await logActivity(h.id, "payment", `Phòng ${inv.code} đã thu đủ hóa đơn T${inv.month.slice(5)} (cập nhật nhanh)`, inv.room_id);
+  } else if (target === "unpaid" || target === "overdue") {
+    await batch([
+      { sql: "DELETE FROM payments WHERE invoice_id=?", args: [inv.id] },
+      { sql: "UPDATE invoices SET state=? WHERE id=?", args: [target, inv.id] },
+    ]);
+  } else return { ok: false, error: "Trạng thái không hợp lệ" };
+  refresh();
+  return { ok: true, status: target };
 }
