@@ -2,6 +2,7 @@ import Link from "next/link";
 import { all } from "@/lib/db";
 import { currentHouse } from "@/lib/house";
 import { currentMonth, vnd } from "@/lib/format";
+import { selectMonth } from "../../actions";
 import { accent, cardCls, tdCls, thCls } from "@/lib/ui";
 
 type Row = { month: string; n: number; total: number; paid: number; fully: number };
@@ -60,7 +61,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
               const debt = r ? r.total - r.paid : 0;
               return (
                 <tr key={m} className={m === now ? "bg-brand-50" : ""}>
-                  <td className={tdCls}><Link className="font-medium text-brand-700 hover:underline" href={`/invoices?month=${m}`}>Tháng {m.slice(5)}/{year}</Link></td>
+                  <td className={tdCls}><form action={selectMonth}><input type="hidden" name="month" value={m} /><input type="hidden" name="back" value="/invoices" /><button className="font-medium text-brand-700 hover:underline">Tháng {m.slice(5)}/{year}</button></form></td>
                   {r ? (
                     <>
                       <td className={`${tdCls} text-right`}>{vnd(r.total)}</td>

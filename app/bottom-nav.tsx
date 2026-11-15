@@ -30,6 +30,7 @@ const MORE = [
   { href: "/readings", label: "Bảng điện nước" },
   { href: "/settings", label: "Cài đặt" },
   { href: "/import", label: "Nhập dữ liệu sheet" },
+  { href: "/account", label: "Đổi mật khẩu" },
 ];
 
 /** Thanh nút dưới cùng (chỉ hiện trên điện thoại) kèm bảng "Khác" trượt lên. */

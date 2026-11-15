@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { checkPassword, clearSession, requireAdmin, setSession } from "@/lib/auth";
+import { checkPassword, clearSession, requireAdmin, setPassword, setSession } from "@/lib/auth";
+import { setSelectedMonth } from "@/lib/month";
 import { all, batch, one, run } from "@/lib/db";
 import { currentHouse, setCurrentHouse } from "@/lib/house";
 import { generateInvoice, generateMonth, saveInvoice } from "@/lib/billing";
@@ -28,13 +29,37 @@ const back = (path: string, params: Record<string, string>) =>
 
 /* ---------- Đăng nhập ---------- */
 export async function login(f: FormData) {
-  if (checkPassword(str(f, "password"))) {
+  if (await checkPassword(str(f, "password"))) {
     await setSession();
     redirect("/");
   }
   await new Promise((r) => setTimeout(r, 800)); // làm chậm việc dò mật khẩu
   redirect("/login?err=1");
 }
+/** Đổi mật khẩu đăng nhập: cần mật khẩu hiện tại; đổi xong các máy khác bị đăng xuất, máy này giữ đăng nhập. */
+export async function changePassword(f: FormData) {
+  await requireAdmin();
+  const cur = str(f, "current"), next = String(f.get("next") ?? ""), again = String(f.get("confirm") ?? "");
+  if (!(await checkPassword(cur))) {
+    await new Promise((r) => setTimeout(r, 800));
+    back("/account", { err: "Mật khẩu hiện tại chưa đúng" });
+  }
+  if (next.length < 8) back("/account", { err: "Mật khẩu mới phải từ 8 ký tự" });
+  if (next !== again) back("/account", { err: "Hai lần nhập mật khẩu mới chưa giống nhau" });
+  if (next === cur) back("/account", { err: "Mật khẩu mới phải khác mật khẩu cũ" });
+  const ver = await setPassword(next);
+  await setSession(ver);
+  back("/account", { ok: "Đã đổi mật khẩu. Lần đăng nhập sau dùng mật khẩu mới." });
+}
+
+/** Chọn tháng làm việc (lưu cookie) rồi quay lại trang đang xem. */
+export async function selectMonth(f: FormData) {
+  await requireAdmin();
+  await setSelectedMonth(str(f, "month"));
+  const to = str(f, "back");
+  redirect(to.startsWith("/") && !to.startsWith("//") ? to : "/");
+}
+
 export async function logout() {
   await clearSession();
   redirect("/login");

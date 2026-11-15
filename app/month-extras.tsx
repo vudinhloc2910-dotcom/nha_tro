@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { saveChiCategories, saveExpenseItems, saveNewRooms } from "./actions";
 import { vnd } from "@/lib/format";
 import type { LedgerMonth } from "@/lib/ledgermonth";
@@ -15,9 +14,67 @@ type Exp = { name: string; qty: string; unit: string };
 type NR = { room: string; rent: string; people: string; phone: string; total: string; note: string };
 export type LiveThu = { dien: number; nuoc: number; mang: number; dich_vu: number; tien_phong: number; phat_sinh: number };
 
+
+type SaveResult = { ok: boolean; error?: string };
+
+/**
+ * Tự lưu: lưu ngay khi rời ô (gọi flush), tự lưu sau 1,2 giây khi ngừng gõ, lưu nốt khi chuyển sang trang khác,
+ * và báo trạng thái "Chưa lưu / Đang lưu / Đã lưu". Không làm tải lại trang nên đang gõ không bị mất vị trí.
+ */
+function useAutosave<T>(value: T, save: (v: T) => Promise<SaveResult>, onStatus: (s: string) => void) {
+  const snap = useRef(JSON.stringify(value));
+  const latest = useRef(value);
+  const saveRef = useRef(save);
+  const statusRef = useRef(onStatus);
+  // Cập nhật giá trị mới nhất sau mỗi lần hiển thị (không cập nhật trong lúc hiển thị)
+  useEffect(() => { latest.current = value; saveRef.current = save; statusRef.current = onStatus; });
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const busy = useRef(false);
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+
+  const flush = useCallback(async (): Promise<void> => {
+    clearTimeout(timer.current);
+    if (busy.current) return;
+    const cur = JSON.stringify(latest.current);
+    if (cur === snap.current) return;
+    busy.current = true;
+    statusRef.current("Đang lưu…");
+    let r: SaveResult;
+    try { r = await saveRef.current(latest.current); } catch { r = { ok: false, error: "Mất kết nối" }; }
+    busy.current = false;
+    if (r.ok) {
+      snap.current = cur;
+      statusRef.current("Đã lưu ✓");
+      if (JSON.stringify(latest.current) !== snap.current) void flushRef.current(); // trong lúc lưu lại có sửa tiếp
+    } else {
+      statusRef.current(`Lỗi: ${r.error ?? "không lưu được"}. Bấm "Lưu ngay" để thử lại`);
+    }
+  }, []);
+
+  useEffect(() => { flushRef.current = flush; }, [flush]);
+
+  useEffect(() => {
+    if (JSON.stringify(value) !== snap.current) {
+      statusRef.current("Chưa lưu…");
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => void flush(), 1200);
+    }
+  }, [value, flush]);
+
+  // Chuyển sang trang khác: lưu nốt phần đang dở
+  useEffect(() => () => { clearTimeout(timer.current); void flush(); }, [flush]);
+
+  return useMemo(() => ({ flush: () => void flush(), dirty: () => JSON.stringify(latest.current) !== snap.current }), [flush]);
+}
+
+function StatusText({ t }: { t?: string }) {
+  if (!t) return null;
+  const cls = t.startsWith("Lỗi") ? "text-red-700" : t.startsWith("Chưa") || t.startsWith("Đang") ? "text-amber-700" : "text-green-700";
+  return <span className={`text-sm ${cls}`}>{t}</span>;
+}
+
 /** Ba bảng dưới bảng hóa đơn (giống cuối tab sheet): Chi phí phát sinh, Thu tiền phòng mới, Chi tiết lợi nhuận. */
 export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveThu; ledger: LedgerMonth }) {
-  const router = useRouter();
   const [items, setItems] = useState<Exp[]>(ledger.items.map((i) => ({ name: i.name, qty: String(i.qty), unit: String(i.unit) })));
   const [rooms, setRooms] = useState<NR[]>(ledger.newRooms.map((r) => ({ room: r.room, rent: String(r.rent), people: String(r.people), phone: r.phone, total: String(r.total), note: r.note })));
   const [chi, setChi] = useState<Record<string, string>>({
@@ -25,7 +82,17 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
     dich_vu: ledger.chi.dich_vu ? String(ledger.chi.dich_vu) : "", tien_phong: ledger.chi.tien_phong ? String(ledger.chi.tien_phong) : "",
   });
   const [msg, setMsg] = useState<Record<string, string>>({});
-  const flash = (k: string, t: string) => { setMsg((p) => ({ ...p, [k]: t })); setTimeout(() => setMsg((p) => ({ ...p, [k]: "" })), 2500); };
+  const setM = (k: string) => (t: string) => setMsg((p) => ({ ...p, [k]: t }));
+  const fixedRent = ledger.rentMonthly > 0;
+  const exp = useAutosave(items, (v) => saveExpenseItems(month, v), setM("exp"));
+  const nr = useAutosave(rooms, (v) => saveNewRooms(month, v), setM("new"));
+  const cs = useAutosave(chi, (v) => saveChiCategories(month, fixedRent ? { dien: v.dien, nuoc: v.nuoc, mang: v.mang, dich_vu: v.dich_vu } : v), setM("chi"));
+  // Đóng tab hoặc tải lại trang khi còn phần chưa lưu: trình duyệt hỏi lại
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent) => { if (exp.dirty() || nr.dirty() || cs.dirty()) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [exp, nr, cs]);
 
   const itemTotal = (i: Exp) => Math.round(num(i.qty || "1") * num(i.unit));
   const expTotal = items.reduce((a, i) => a + itemTotal(i), 0);
@@ -46,17 +113,11 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
   const chiTotal = rows.reduce((a, r) => a + r.chi, 0) + (expTotal - investItems - salaryItems) + salary;
   const profit = thuTotal - chiTotal;
 
-  async function run(key: string, fn: () => Promise<{ ok: boolean; error?: string }>) {
-    setMsg((p) => ({ ...p, [key]: "Đang lưu…" }));
-    const r = await fn();
-    if (r.ok) { flash(key, "Đã lưu ✓"); router.refresh(); } else flash(key, r.error ?? "Không lưu được");
-  }
-
   return (
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-2">
         {/* ===== Chi phí phát sinh ===== */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <section onBlur={exp.flush} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-center text-base font-bold tracking-wide">CHI PHÍ PHÁT SINH (#)</h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[26rem] border-collapse">
@@ -77,14 +138,14 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => setItems([...items, { name: "", qty: "1", unit: "" }])} className="text-sm font-medium text-brand-700 hover:underline">+ Thêm dòng</button>
-            <button type="button" onClick={() => run("exp", () => saveExpenseItems(month, items))} className="rounded-xl bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700">Lưu bảng phát sinh</button>
-            <span className="text-sm text-green-700">{msg.exp}</span>
+            <button type="button" onClick={exp.flush} className="rounded-xl border border-brand-300 bg-white px-4 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-50">Lưu ngay</button>
+            <StatusText t={msg.exp} />
           </div>
-          <p className="mt-1 text-xs text-gray-500">Dòng có chữ &quot;lương&quot; tính là lương quản lý, dòng &quot;đầu tư&quot; không tính vào lãi tháng (tính vào vốn).</p>
+          <p className="mt-1 text-xs text-gray-500">Tự động lưu khi anh rời ô hoặc ngừng gõ khoảng 1 giây. Dòng có chữ &quot;lương&quot; tính là lương quản lý, dòng &quot;đầu tư&quot; không tính vào lãi tháng (tính vào vốn).</p>
         </section>
 
         {/* ===== Thu tiền phòng mới ===== */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <section onBlur={nr.flush} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-center text-base font-bold tracking-wide">THU TIỀN PHÒNG MỚI (*)</h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[34rem] border-collapse">
@@ -110,15 +171,15 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => setRooms([...rooms, { room: "", rent: "", people: "1", phone: "", total: "", note: "" }])} className="text-sm font-medium text-brand-700 hover:underline">+ Thêm phòng mới</button>
-            <button type="button" onClick={() => run("new", () => saveNewRooms(month, rooms))} className="rounded-xl bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700">Lưu bảng phòng mới</button>
-            <span className="text-sm text-green-700">{msg.new}</span>
+            <button type="button" onClick={nr.flush} className="rounded-xl border border-brand-300 bg-white px-4 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-50">Lưu ngay</button>
+            <StatusText t={msg.new} />
           </div>
           <p className="mt-1 text-xs text-gray-500">Khoản thu ngoài hóa đơn tháng: tiền cọc và tiền tháng đầu của khách mới vào. Tổng này cộng vào doanh thu tháng.</p>
         </section>
       </div>
 
       {/* ===== Chi tiết lợi nhuận ===== */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <section onBlur={cs.flush} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <h2 className="mb-2 text-center text-base font-bold tracking-wide">CHI TIẾT LỢI NHUẬN THÁNG {month.slice(5)}/{month.slice(0, 4)}</h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[30rem] border-collapse">
@@ -148,8 +209,8 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
           </table>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <button type="button" onClick={() => run("chi", () => saveChiCategories(month, rentFixed ? { dien: chi.dien, nuoc: chi.nuoc, mang: chi.mang, dich_vu: chi.dich_vu } : chi))} className="rounded-xl bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700">Lưu số chi</button>
-          <span className="text-sm text-green-700">{msg.chi}</span>
+          <button type="button" onClick={cs.flush} className="rounded-xl border border-brand-300 bg-white px-4 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-50">Lưu ngay</button>
+          <StatusText t={msg.chi} />
         </div>
         <p className="mt-1 text-xs text-gray-500">Cột &quot;Tổng thu&quot; tự tính từ hóa đơn các phòng ngay trên màn hình. Nhập số tiền thực tế anh trả (điện, nước, mạng, dịch vụ, thuê nhà) vào cột &quot;Tổng chi&quot; để ra lãi.</p>
       </section>

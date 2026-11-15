@@ -1,3 +1,4 @@
+import { selectedMonth } from "@/lib/month";
 import Link from "next/link";
 import { listHouses, readAll } from "@/lib/db";
 import { ago, recentActivity, type ActKind } from "@/lib/activity";
@@ -7,7 +8,6 @@ import { currentHouse } from "@/lib/house";
 import { houseReport } from "@/lib/report";
 import { houseTodos } from "@/lib/todos";
 import { toggleResidence, selectHouse } from "../../actions";
-import { MonthPicker } from "../../components";
 import { RemindButton } from "../../remind-button";
 import { TodoCard } from "../../todo-card";
 import { accent, cardCls, tdCls, thCls } from "@/lib/ui";
@@ -27,7 +27,7 @@ const KIND: Record<ActKind, { label: string; cls: string }> = {
 /** Tổng quan các nhà: số liệu tháng, việc cần xử lý (nợ trễ hạn, hợp đồng sắp hết, phòng trống, tạm trú) và nhật ký hoạt động. */
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const sp = await searchParams;
-  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
+  const month = await selectedMonth();
   const houses = await listHouses();
   const cur = await currentHouse();
   // Tải song song: tất cả cùng lúc thay vì lần lượt (database ở xa, mỗi lượt gọi tốn thời gian)
@@ -65,7 +65,6 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Tổng quan các nhà · tháng {monthLabel(month)}</h1>
-        <MonthPicker action="/overview" month={month} />
       </div>
 
       <TodoCard houseName={cur.name} todos={todos} />

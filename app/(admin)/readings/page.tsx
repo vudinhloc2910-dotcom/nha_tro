@@ -1,8 +1,9 @@
+import { selectedMonth } from "@/lib/month";
 import { all } from "@/lib/db";
 import { currentHouse } from "@/lib/house";
 import { currentMonth, monthLabel, prevMonth } from "@/lib/format";
 import { saveReadings } from "../../actions";
-import { Flash, MonthPicker } from "../../components";
+import { Flash } from "../../components";
 import { btnCls, cardCls, inputCls, tdCls, thCls } from "@/lib/ui";
 
 type Row = {
@@ -14,7 +15,7 @@ type Row = {
 export default async function ReadingsPage({ searchParams }: { searchParams: Promise<{ month?: string; ok?: string; err?: string }> }) {
   const sp = await searchParams;
   const house = await currentHouse();
-  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
+  const month = await selectedMonth();
   const rows = await all<Row>(
     `SELECT r.id, r.code, t.people,
        c.elec_old cur_eo, c.elec_new cur_en, c.water_old cur_wo, c.water_new cur_wn,
@@ -32,7 +33,6 @@ export default async function ReadingsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Chỉ số điện nước tháng {monthLabel(month)}</h1>
-        <MonthPicker action="/readings" month={month} />
       </div>
       <Flash ok={sp.ok} err={sp.err} />
       <p className="text-sm text-gray-600">

@@ -4,7 +4,9 @@ import { logout } from "../actions";
 import { listHouses } from "@/lib/db";
 import { currentHouse } from "@/lib/house";
 import { houseTodos } from "@/lib/todos";
+import { selectedMonth } from "@/lib/month";
 import { HouseSwitcher } from "../house-switcher";
+import { MonthPicker } from "../month-picker";
 import { BottomNav } from "../bottom-nav";
 
 const MAIN = [
@@ -28,12 +30,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   await requireAdmin();
   const houses = await listHouses();
   const house = await currentHouse();
+  const month = await selectedMonth();
   const todos = await houseTodos(house.id);
   const badge = todos.filter((t) => !t.done).length;
   return (
     <div>
       <header className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+          <MonthPicker month={month} />
           <HouseSwitcher houses={houses} currentId={house.id} />
           <nav className="hidden flex-wrap items-center gap-1 text-sm md:flex">
             {MAIN.map((n) => (
@@ -52,9 +56,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               </div>
             </details>
           </nav>
-          <form action={logout} className="ml-auto hidden md:block">
-            <button className="text-sm text-gray-600 hover:underline">Đăng xuất</button>
-          </form>
+          <div className="ml-auto hidden items-center gap-4 md:flex">
+            <Link href="/account" className="text-sm text-gray-600 hover:underline">Đổi mật khẩu</Link>
+            <form action={logout}><button className="text-sm text-gray-600 hover:underline">Đăng xuất</button></form>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-3 pb-28 pt-4 sm:px-4 md:pb-8 md:pt-5">{children}</main>
