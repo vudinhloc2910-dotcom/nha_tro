@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { saveChiCategories, saveExpenseItems, saveNewRooms } from "./actions";
+import { pinExpense, saveChiCategories, saveExpenseItems, saveNewRooms, unpinExpense } from "./actions";
 import { vnd } from "@/lib/format";
 import type { LedgerMonth } from "@/lib/ledgermonth";
 
@@ -81,7 +81,20 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
     dien: ledger.chi.dien ? String(ledger.chi.dien) : "", nuoc: ledger.chi.nuoc ? String(ledger.chi.nuoc) : "", mang: ledger.chi.mang ? String(ledger.chi.mang) : "",
     dich_vu: ledger.chi.dich_vu ? String(ledger.chi.dich_vu) : "", tien_phong: ledger.chi.tien_phong ? String(ledger.chi.tien_phong) : "",
   });
+  const [pins, setPins] = useState<string[]>(ledger.pins);
   const [msg, setMsg] = useState<Record<string, string>>({});
+  async function togglePin(it: Exp) {
+    const name = it.name.trim();
+    if (!name) { setMsg((p) => ({ ...p, exp: "Nhập tên khoản trước khi ghim" })); return; }
+    if (pins.includes(name)) {
+      const r = await unpinExpense(name);
+      if (r.ok) { setPins(pins.filter((x) => x !== name)); setMsg((p) => ({ ...p, exp: `Đã bỏ ghim "${name}"` })); }
+    } else {
+      const r = await pinExpense(month, it);
+      if (r.ok) { setPins([...pins, name]); setMsg((p) => ({ ...p, exp: `Đã ghim "${name}": tự có ở các tháng sau` })); }
+      else setMsg((p) => ({ ...p, exp: r.error ?? "Không ghim được" }));
+    }
+  }
   const setM = (k: string) => (t: string) => setMsg((p) => ({ ...p, [k]: t }));
   const fixedRent = ledger.rentMonthly > 0;
   const exp = useAutosave(items, (v) => saveExpenseItems(month, v), setM("exp"));
@@ -121,10 +134,16 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
           <h2 className="mb-2 text-center text-base font-bold tracking-wide">CHI PHÍ PHÁT SINH (#)</h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[26rem] border-collapse">
-              <thead><tr><th className={th}>Tên hạng mục</th><th className={`${th} w-16`}>Số lượng</th><th className={`${th} w-28`}>Đơn giá</th><th className={`${th} w-28 text-right`}>Thành tiền</th><th className={`${th} w-8`} /></tr></thead>
+              <thead><tr><th className={`${th} w-8`} /><th className={th}>Tên hạng mục</th><th className={`${th} w-16`}>Số lượng</th><th className={`${th} w-28`}>Đơn giá</th><th className={`${th} w-28 text-right`}>Thành tiền</th><th className={`${th} w-8`} /></tr></thead>
               <tbody>
                 {items.map((it, i) => (
-                  <tr key={i}>
+                  <tr key={i} className={pins.includes(it.name.trim()) && it.name.trim() ? "bg-amber-50" : ""}>
+                    <td className={td}>
+                      <button type="button" onClick={() => void togglePin(it)} title={pins.includes(it.name.trim()) && it.name.trim() ? "Đã ghim: tự có ở các tháng sau. Bấm để bỏ ghim" : "Ghim: tự có sẵn ở các tháng sau"} aria-label="Ghim khoản này"
+                        className={`rounded p-1 ${pins.includes(it.name.trim()) && it.name.trim() ? "text-amber-600" : "text-gray-300 hover:text-amber-500"}`}>
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill={pins.includes(it.name.trim()) && it.name.trim() ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2h-5v5l-1 1-1-1v-5H5v-2l3-3z" /></svg>
+                      </button>
+                    </td>
                     <td className={td}><input className={inp} value={it.name} placeholder="VD: Sửa điều hòa 202" onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} /></td>
                     <td className={td}><input className={`${inp} text-right`} type="number" min="0" inputMode="decimal" value={it.qty} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} /></td>
                     <td className={td}><input className={`${inp} text-right`} type="number" inputMode="numeric" value={it.unit} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)))} /></td>
@@ -132,7 +151,7 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
                     <td className={td}><button type="button" aria-label="Xóa dòng" onClick={() => setItems(items.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600">✕</button></td>
                   </tr>
                 ))}
-                <tr className="bg-yellow-100 font-bold"><td className={td} colSpan={3}>TỔNG</td><td className={`${td} text-right`}>{vnd(expTotal)}</td><td className={td} /></tr>
+                <tr className="bg-yellow-100 font-bold"><td className={td} colSpan={4}>TỔNG</td><td className={`${td} text-right`}>{vnd(expTotal)}</td><td className={td} /></tr>
               </tbody>
             </table>
           </div>
@@ -141,7 +160,7 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
             <button type="button" onClick={exp.flush} className="rounded-xl border border-brand-300 bg-white px-4 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-50">Lưu ngay</button>
             <StatusText t={msg.exp} />
           </div>
-          <p className="mt-1 text-xs text-gray-500">Tự động lưu khi anh rời ô hoặc ngừng gõ khoảng 1 giây. Dòng có chữ &quot;lương&quot; tính là lương quản lý, dòng &quot;đầu tư&quot; không tính vào lãi tháng (tính vào vốn).</p>
+          <p className="mt-1 text-xs text-gray-500">Bấm hình ghim bên trái để ghim khoản lặp hàng tháng (lương, mạng, vệ sinh…): từ tháng sau tự có sẵn. Tự động lưu khi anh rời ô hoặc ngừng gõ khoảng 1 giây. Dòng có chữ &quot;lương&quot; tính là lương quản lý, dòng &quot;đầu tư&quot; không tính vào lãi tháng (tính vào vốn).</p>
         </section>
 
         {/* ===== Thu tiền phòng mới ===== */}

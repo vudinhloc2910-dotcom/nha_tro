@@ -99,6 +99,14 @@ const SCHEMA = `
     status TEXT NOT NULL DEFAULT 'open', source TEXT NOT NULL DEFAULT 'owner', cost INTEGER NOT NULL DEFAULT 0,
     created TEXT NOT NULL, resolved TEXT
   );
+  CREATE TABLE IF NOT EXISTS pinned_expenses(
+    id INTEGER PRIMARY KEY, house_id INTEGER NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'phat_sinh',
+    qty REAL NOT NULL DEFAULT 1, unit INTEGER NOT NULL DEFAULT 0, from_month TEXT NOT NULL, last_month TEXT NOT NULL,
+    UNIQUE(house_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS ledger_init(
+    house_id INTEGER NOT NULL, month TEXT NOT NULL, PRIMARY KEY(house_id, month)
+  );
   CREATE TABLE IF NOT EXISTS payments(
     id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     amount INTEGER NOT NULL, method TEXT DEFAULT 'bank', paid_at TEXT NOT NULL, note TEXT DEFAULT ''
@@ -135,7 +143,7 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
  * Phiên bản cấu trúc database. Khi thêm bảng/cột mới trong init() thì TĂNG số này, để lần chạy đầu tiên nâng cấp một lần.
  * Các lần sau chỉ tốn 1 truy vấn kiểm tra (thay vì ~25 truy vấn mỗi lần khởi động máy chủ).
  */
-const SCHEMA_VERSION = "11";
+const SCHEMA_VERSION = "12";
 
 async function init() {
   const c = await getClient();

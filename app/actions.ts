@@ -560,6 +560,8 @@ export async function saveExpenseItems(month: string, items: { name: string; qty
     const amount = Math.round(qty * unit);
     if (!amount) continue;
     st.push({ sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source,meta) VALUES (?,?,'chi',?,?,?,'manual',?)", args: [h.id, month, catOf(name), name, amount, JSON.stringify({ qty, unit })] });
+    // Khoản đã ghim: cập nhật số tiền mới cho các tháng sau (chỉ khi sửa ở tháng mới nhất đã sửa)
+    st.push({ sql: "UPDATE pinned_expenses SET qty=?, unit=?, last_month=? WHERE house_id=? AND name=? AND ?>=last_month", args: [qty, unit, month, h.id, name, month] });
   }
   await batch(st);
   return { ok: true };
@@ -807,4 +809,28 @@ export async function addRoomService(f: FormData) {
   await run("INSERT INTO services(house_id, name, type, price, room_id) VALUES (?,?,?,?,?)", house.id, name, type, price, scope);
   refresh();
   back(dest, { ok: scope ? `Đã thêm "${name}" cho phòng này` : `Đã thêm "${name}" cho tất cả phòng trong nhà`, tab: "price" });
+}
+
+/** Ghim một khoản chi hằng tháng: từ tháng sau trở đi, khoản này tự có sẵn trong bảng Chi phí phát sinh. */
+export async function pinExpense(month: string, item: { name: string; qty: string; unit: string }): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const name = String(item.name ?? "").trim().slice(0, 120);
+  const qty = toNum(item.qty) ?? 1, unit = toNum(item.unit);
+  if (!name) return { ok: false, error: "Nhập tên khoản trước khi ghim" };
+  if (unit === null || Number.isNaN(unit) || Number.isNaN(qty)) return { ok: false, error: "Nhập đơn giá trước khi ghim" };
+  await batch([
+    { sql: "INSERT INTO pinned_expenses(house_id,name,category,qty,unit,from_month,last_month) VALUES (?,?,?,?,?,?,?) ON CONFLICT(house_id,name) DO UPDATE SET qty=excluded.qty, unit=excluded.unit, category=excluded.category, from_month=excluded.from_month, last_month=excluded.last_month", args: [h.id, name, catOf(name), qty, Math.round(unit), month, month] },
+    // Tháng đang ghim đã có khoản này rồi, không thêm lần nữa
+    { sql: "INSERT OR IGNORE INTO ledger_init(house_id, month) VALUES (?,?)", args: [h.id, month] },
+  ]);
+  return { ok: true };
+}
+
+export async function unpinExpense(name: string): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const h = await currentHouse();
+  await run("DELETE FROM pinned_expenses WHERE house_id=? AND name=?", h.id, String(name ?? "").trim());
+  return { ok: true };
 }
