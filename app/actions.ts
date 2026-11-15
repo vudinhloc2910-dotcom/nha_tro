@@ -130,7 +130,7 @@ export async function saveSettings(f: FormData) {
 export async function saveService(f: FormData) {
   await requireAdmin();
   const id = num(f, "id");
-  const type = str(f, "type") === "person" ? "person" : "room";
+  const type = str(f, "type") === "person" ? "person" : str(f, "type") === "vehicle" ? "vehicle" : "room";
   const name = str(f, "name");
   if (!name) back("/settings", { err: "Nhập tên dịch vụ" });
   const house = await currentHouse();
@@ -143,7 +143,8 @@ export async function deleteService(f: FormData) {
   await requireAdmin();
   await run("DELETE FROM services WHERE id=? AND house_id=?", num(f, "id"), (await currentHouse()).id);
   refresh();
-  back("/settings", { ok: "Đã xóa dịch vụ (hóa đơn cũ giữ nguyên)" });
+  const to = str(f, "back");
+  back(to.startsWith("/") && !to.startsWith("//") ? to : "/settings", { ok: "Đã xóa dịch vụ (hóa đơn cũ giữ nguyên)", ...(to.includes("/rooms/") ? { tab: "price" } : {}) });
 }
 
 /* ---------- Chỉ số điện nước ---------- */
@@ -390,7 +391,7 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
 export type RoomProfileInput = {
   roomId: number; month: string;
   code: string; tenantName: string; phone: string; people: string; rent: string; dueDay: string; note: string;
-  elecPrice: string; waterPrice: string;
+  elecPrice: string; waterPrice: string; elecStart: string; waterStart: string;
   svc: Record<string, { unit: string; off: boolean }>;
 };
 export async function saveRoomProfile(inp: RoomProfileInput): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -405,7 +406,7 @@ export async function saveRoomProfile(inp: RoomProfileInput): Promise<{ ok: true
     if (!name) return { ok: false, error: "Nhập tên khách" };
     const n = (v: string) => { const x = toNum(v); return x === null || Number.isNaN(x) ? null : x; };
     const st: { sql: string; args: (string | number | null)[] }[] = [];
-    st.push({ sql: "UPDATE rooms SET code=?, rent=?, due_day=?, note=? WHERE id=?", args: [code, Math.max(0, Math.round(n(inp.rent) ?? 0)), Math.min(31, Math.max(1, Math.round(n(inp.dueDay) ?? 15))), String(inp.note ?? "").slice(0, 200), room.id] });
+    st.push({ sql: "UPDATE rooms SET code=?, rent=?, due_day=?, note=?, elec_start=?, water_start=? WHERE id=?", args: [code, Math.max(0, Math.round(n(inp.rent) ?? 0)), Math.min(31, Math.max(1, Math.round(n(inp.dueDay) ?? 15))), String(inp.note ?? "").slice(0, 200), Math.max(0, n(inp.elecStart) ?? 0), Math.max(0, n(inp.waterStart) ?? 0), room.id] });
     st.push({ sql: "UPDATE tenants SET name=?, phone=?, people=? WHERE room_id=? AND active=1", args: [name, String(inp.phone ?? "").trim().slice(0, 30), Math.max(1, Math.round(n(inp.people) ?? 1)), room.id] });
     const pref = (key: string, value: number | null) => {
       if (value === null) st.push({ sql: "DELETE FROM room_prefs WHERE room_id=? AND key=?", args: [room.id, key] });
@@ -764,4 +765,21 @@ export async function deleteRoom(f: FormData) {
   ]);
   refresh();
   back("/rooms", { ok: `Đã xóa phòng ${r!.code}` });
+}
+
+/** Thêm một khoản dịch vụ/phí (wifi, máy giặt, gửi xe...) cho riêng một phòng hoặc cho tất cả phòng trong nhà. */
+export async function addRoomService(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  const roomId = num(f, "room_id");
+  const name = str(f, "name").slice(0, 60);
+  const type = str(f, "type") === "person" ? "person" : str(f, "type") === "vehicle" ? "vehicle" : "room";
+  const price = Math.max(0, Math.round(num(f, "price")));
+  const dest = `/rooms/${roomId}`;
+  if (!name) back(dest, { err: "Nhập tên khoản phí", tab: "price" });
+  if (!(await one("SELECT id FROM rooms WHERE id=? AND house_id=?", roomId, house.id))) back("/rooms", { err: "Không tìm thấy phòng" });
+  const scope = str(f, "scope") === "house" ? null : roomId;
+  await run("INSERT INTO services(house_id, name, type, price, room_id) VALUES (?,?,?,?,?)", house.id, name, type, price, scope);
+  refresh();
+  back(dest, { ok: scope ? `Đã thêm "${name}" cho phòng này` : `Đã thêm "${name}" cho tất cả phòng trong nhà`, tab: "price" });
 }

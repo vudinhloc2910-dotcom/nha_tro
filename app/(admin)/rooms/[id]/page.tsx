@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { all, readAll } from "@/lib/db";
 import { currentMonth, dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
 import { loadMonth } from "@/lib/monthdata";
-import { addRoomExtra, addVehicle, checkoutTenant, deleteRoom, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
+import { addRoomExtra, addRoomService, addVehicle, checkoutTenant, deleteRoom, deleteService, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
+import { computeInvoice, svcUnitLabel } from "@/lib/calc";
 import { Flash, StatusBadge } from "../../../components";
 import { RoomEditButton } from "../../../room-editor";
 import { accent, btnCls, btnDangerCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
@@ -152,32 +153,67 @@ export default async function RoomPage({
       )}
 
       {tab === "price" && (
-        <section className={cardCls}>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold">Giá và phí đang áp dụng cho phòng {room.code}</h2>
-            {view && <RoomEditButton room={view} month={month} services={md.services} label="Đổi giá riêng" />}
-          </div>
-          {!view ? <p className="text-sm text-gray-600">Phòng chưa có khách nên chưa có bảng giá. Thêm khách ở tab Thông tin chung.</p> : (
-            <table className="w-full">
-              <thead><tr><th className={thCls}>Khoản</th><th className={`${thCls} text-right`}>Đơn giá</th><th className={thCls}>Áp dụng</th></tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                <tr><td className={tdCls}>Tiền thuê phòng</td><td className={`${tdCls} text-right`}>{vnd(room.rent)}</td><td className={`${tdCls} text-xs text-gray-500`}>mỗi tháng</td></tr>
-                <tr><td className={tdCls}>Điện</td><td className={`${tdCls} text-right`}>{vnd(view.input.elecPrice)}/kWh</td><td className={`${tdCls} text-xs`}>{view.prefs.elecPrice !== null ? <Tag own /> : <Tag />}</td></tr>
-                <tr><td className={tdCls}>Nước</td><td className={`${tdCls} text-right`}>{vnd(view.input.waterPrice)}/{view.input.waterMode === "person" ? "người" : "m³"}</td><td className={`${tdCls} text-xs`}>{view.prefs.waterPrice !== null ? <Tag own /> : <Tag />}</td></tr>
-                {md.services.map((s) => {
-                  const p = view.prefs.svc[s.id];
-                  return (
-                    <tr key={s.id}>
-                      <td className={tdCls}>{s.name}</td>
-                      <td className={`${tdCls} text-right`}>{p?.off ? <span className="text-gray-400">Không thu</span> : `${vnd(p?.unit ?? s.price)}${s.type === "person" ? "/người" : "/phòng"}`}</td>
-                      <td className={`${tdCls} text-xs`}>{p?.off || p?.unit !== null ? <Tag own /> : <Tag />}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </section>
+        <>
+          <section className={cardCls}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-semibold">Giá và phí của phòng {room.code}</h2>
+                <p className="text-xs text-gray-500">Gồm tiền phòng, điện, nước và các khoản phí khác (dịch vụ, máy giặt, gửi xe, wifi...). Cột &quot;Dự kiến&quot; là số tiền mỗi tháng nếu dùng đúng như hiện tại.</p>
+              </div>
+              {view && <RoomEditButton room={view} month={month} services={md.services} label="Sửa giá riêng và số đầu vào" />}
+            </div>
+            {!view ? <p className="text-sm text-gray-600">Phòng chưa có khách nên chưa có bảng giá. Thêm khách ở tab Thông tin chung.</p> : (() => {
+              const est = computeInvoice({ ...view.input, elecNew: view.input.elecOld, waterNew: view.input.waterOld, extras: [], discount: 0, debt: 0 });
+              const svcAmt = (name: string) => est.lines.find((l) => l.label === name)?.amount ?? 0;
+              const mine = md.services.filter((s) => !s.roomId || s.roomId === room.id);
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[34rem]">
+                    <thead><tr><th className={thCls}>Khoản</th><th className={thCls}>Cách tính</th><th className={`${thCls} text-right`}>Đơn giá</th><th className={`${thCls} text-right`}>Dự kiến/tháng</th><th className={thCls}>Áp dụng</th></tr></thead>
+                    <tbody className="divide-y divide-gray-100">
+                      <tr><td className={tdCls}>Tiền thuê phòng</td><td className={`${tdCls} text-xs text-gray-500`}>mỗi tháng</td><td className={`${tdCls} text-right`}>{vnd(room.rent)}</td><td className={`${tdCls} text-right font-medium`}>{vnd(room.rent)}</td><td className={`${tdCls} text-xs`}><Tag /></td></tr>
+                      <tr><td className={tdCls}>Điện<div className="text-xs text-gray-400">Số đầu vào: {view.start.elec}</div></td><td className={`${tdCls} text-xs text-gray-500`}>theo số kWh</td><td className={`${tdCls} text-right`}>{vnd(view.input.elecPrice)}/kWh</td><td className={`${tdCls} text-right text-gray-400`}>theo chỉ số</td><td className={`${tdCls} text-xs`}>{view.prefs.elecPrice !== null ? <Tag own /> : <Tag />}</td></tr>
+                      <tr><td className={tdCls}>Nước<div className="text-xs text-gray-400">Số đầu vào: {view.start.water}</div></td><td className={`${tdCls} text-xs text-gray-500`}>{view.input.waterMode === "person" ? "theo người" : "theo m³"}</td><td className={`${tdCls} text-right`}>{vnd(view.input.waterPrice)}/{view.input.waterMode === "person" ? "người" : "m³"}</td><td className={`${tdCls} text-right ${view.input.waterMode === "person" ? "font-medium" : "text-gray-400"}`}>{view.input.waterMode === "person" ? vnd(svcAmt("Tiền nước")) : "theo chỉ số"}</td><td className={`${tdCls} text-xs`}>{view.prefs.waterPrice !== null ? <Tag own /> : <Tag />}</td></tr>
+                      {mine.map((s) => {
+                        const p = view.prefs.svc[s.id];
+                        const off = !!p?.off;
+                        return (
+                          <tr key={s.id}>
+                            <td className={tdCls}>{s.name}{s.type === "vehicle" && <div className="text-xs text-gray-400">{view.input.vehicles} xe đang ghi</div>}</td>
+                            <td className={`${tdCls} text-xs text-gray-500`}>{s.type === "person" ? "theo người" : s.type === "vehicle" ? "theo xe" : "theo phòng"}</td>
+                            <td className={`${tdCls} text-right`}>{off ? <span className="text-gray-400">Không thu</span> : `${vnd(p?.unit ?? s.price)}${svcUnitLabel(s)}`}</td>
+                            <td className={`${tdCls} text-right font-medium`}>{off ? "—" : vnd(svcAmt(s.name))}</td>
+                            <td className={`${tdCls} text-xs`}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {s.roomId ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">Chỉ phòng này</span> : off || p?.unit !== null ? <Tag own /> : <Tag />}
+                                {s.roomId ? <form action={deleteService}><input type="hidden" name="id" value={s.id} /><input type="hidden" name="back" value={`/rooms/${room.id}`} /><button className="text-red-600 hover:underline">Xóa</button></form> : null}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-brand-50 font-bold"><td className={tdCls} colSpan={3}>Cộng các khoản cố định (chưa gồm điện, nước theo chỉ số)</td><td className={`${tdCls} text-right`}>{vnd(est.total)}</td><td className={tdCls} /></tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </section>
+
+          <section className={cardCls}>
+            <h2 className="mb-1 font-semibold">Thêm khoản phí cho phòng</h2>
+            <p className="mb-3 text-xs text-gray-500">Ví dụ Wifi, Máy giặt, Gửi xe (tính theo số xe đã ghi ở tab Thông tin chung), Vệ sinh và rác, Sạc xe điện. Chọn &quot;Chỉ phòng này&quot; nếu chỉ phòng này phải đóng.</p>
+            <form action={addRoomService} className="grid gap-3 sm:grid-cols-6">
+              <input type="hidden" name="room_id" value={room.id} />
+              <div className="sm:col-span-2"><label className={labelCls}>Tên khoản phí</label><input name="name" required list="svc-suggest" className={inputCls} placeholder="VD: Gửi xe" /></div>
+              <div><label className={labelCls}>Cách tính</label><select name="type" className={inputCls}><option value="room">Theo phòng</option><option value="person">Theo người</option><option value="vehicle">Theo xe</option></select></div>
+              <div><label className={labelCls}>Đơn giá (đ)</label><input name="price" type="number" min="0" required className={inputCls} /></div>
+              <div><label className={labelCls}>Áp dụng cho</label><select name="scope" className={inputCls}><option value="room">Chỉ phòng này</option><option value="house">Tất cả phòng trong nhà</option></select></div>
+              <div className="flex items-end"><button className={btnCls}>Thêm khoản</button></div>
+            </form>
+            <datalist id="svc-suggest"><option value="Wifi" /><option value="Máy giặt" /><option value="Gửi xe" /><option value="Vệ sinh, rác" /><option value="Sạc xe điện" /><option value="Điều hòa" /><option value="Thang máy" /><option value="Truyền hình cáp" /></datalist>
+          </section>
+        </>
       )}
 
       {tab === "history" && <History roomId={room.id} invoices={invoices} />}

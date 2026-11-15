@@ -135,7 +135,7 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
  * Phiên bản cấu trúc database. Khi thêm bảng/cột mới trong init() thì TĂNG số này, để lần chạy đầu tiên nâng cấp một lần.
  * Các lần sau chỉ tốn 1 truy vấn kiểm tra (thay vì ~25 truy vấn mỗi lần khởi động máy chủ).
  */
-const SCHEMA_VERSION = "10";
+const SCHEMA_VERSION = "11";
 
 async function init() {
   const c = await getClient();
@@ -157,6 +157,12 @@ async function initFull(c: Client) {
   }
   // Phòng: tầng/khu tự đặt (VD "Tầng trệt", "Mặt bằng kinh doanh") và loại phòng
   const rcols2 = await c.execute("SELECT name FROM pragma_table_info('rooms')");
+  for (const [col, ddl] of [["elec_start", "REAL NOT NULL DEFAULT 0"], ["water_start", "REAL NOT NULL DEFAULT 0"]] as const) {
+    if (!rcols2.rows.some((r) => r.name === col)) await c.execute(`ALTER TABLE rooms ADD COLUMN ${col} ${ddl}`);
+  }
+  // Dịch vụ riêng của một phòng (room_id) hoặc chung cả nhà (room_id rỗng)
+  const scols = await c.execute("SELECT name FROM pragma_table_info('services')");
+  if (!scols.rows.some((r) => r.name === "room_id")) await c.execute("ALTER TABLE services ADD COLUMN room_id INTEGER");
   for (const col of ["floor_label", "kind"]) {
     if (!rcols2.rows.some((r) => r.name === col)) await c.execute(`ALTER TABLE rooms ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
   }

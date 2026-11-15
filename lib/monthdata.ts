@@ -13,10 +13,12 @@ export type RoomView = {
   invoice: { id: number; token: string; total: number; paid: number; locked: boolean; due: string; lines: { label: string; detail: string; amount: number }[] } | null;
   prevUsage: { e: number; w: number } | null;
   hasReading: boolean;
+  /** Số điện, nước đầu vào (số cũ của tháng đầu tiên khi phòng chưa có chỉ số) */
+  start: { elec: number; water: number };
 };
 export type MonthData = {
   houseId: number; month: string; settings: Record<string, string>;
-  services: { id: number; name: string; type: "room" | "person"; price: number }[];
+  services: { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null }[];
   rooms: RoomView[]; vacant: string[];
 };
 
@@ -26,11 +28,11 @@ type KV = { room_id: number; key: string; value: string };
 export async function loadMonth(houseId: number, month: string): Promise<MonthData> {
   const pm = prevMonth(month);
   // TẤT CẢ truy vấn đọc của tháng được gửi trong MỘT lượt gọi database (nhanh hơn nhiều so với gọi lần lượt)
-  const [h, kv, svc, roomRows, prefs0, rm0, readings, extras, invoices, invLines0, prevInv] = await readAll([
+  const [h, kv, svc, roomRows, prefs0, rm0, readings, extras, invoices, invLines0, prevInv, vehR] = await readAll([
     { sql: "SELECT id, name, address FROM houses WHERE id=?", args: [houseId] },
     { sql: "SELECT key, value FROM house_settings WHERE house_id=?", args: [houseId] },
-    { sql: "SELECT id, name, type, price FROM services WHERE house_id=? AND active=1 ORDER BY id", args: [houseId] },
-    { sql: `SELECT r.id, r.code, r.rent, r.due_day, r.note, t.id tid, t.name tname, t.phone, t.people
+    { sql: "SELECT id, name, type, price, room_id roomId FROM services WHERE house_id=? AND active=1 ORDER BY id", args: [houseId] },
+    { sql: `SELECT r.id, r.code, r.rent, r.due_day, r.note, r.elec_start, r.water_start, t.id tid, t.name tname, t.phone, t.people
             FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`, args: [houseId] },
     { sql: "SELECT p.room_id, p.key, p.value FROM room_prefs p JOIN rooms r ON r.id=p.room_id WHERE r.house_id=?", args: [houseId] },
     { sql: "SELECT m.room_id, m.key, m.value FROM room_month m JOIN rooms r ON r.id=m.room_id WHERE m.month=? AND r.house_id=?", args: [month, houseId] },
@@ -44,10 +46,12 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     { sql: `SELECT i.room_id, i.total, i.due_date, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i JOIN rooms r ON r.id=i.room_id
             WHERE r.house_id=? AND i.month=(SELECT MAX(month) FROM invoices WHERE room_id=i.room_id AND month<?)`, args: [houseId, month] },
+    { sql: "SELECT v.room_id, COUNT(*) c FROM vehicles v JOIN rooms r ON r.id=v.room_id WHERE r.house_id=? GROUP BY v.room_id", args: [houseId] },
   ]);
   const settings = mergeSettings(h[0] as House | undefined, kv as { key: string; value: string }[]);
-  const services = svc as { id: number; name: string; type: "room" | "person"; price: number }[];
-  const rooms = roomRows as { id: number; code: string; rent: number; due_day: number; note: string | null; tid: number | null; tname: string | null; phone: string | null; people: number | null }[];
+  const services = svc as { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null }[];
+  const vehCount = new Map((vehR as { room_id: number; c: number }[]).map((x) => [Number(x.room_id), Number(x.c)]));
+  const rooms = roomRows as { id: number; code: string; rent: number; due_day: number; note: string | null; elec_start: number; water_start: number; tid: number | null; tname: string | null; phone: string | null; people: number | null }[];
   const occupied = rooms.filter((r) => r.tid !== null);
   const vacant = rooms.filter((r) => r.tid === null).map((r) => r.code);
   const out: MonthData = { houseId, month, settings, services, rooms: [], vacant };
@@ -79,7 +83,8 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     const svcPrefs: Record<number, { unit: number | null; off: boolean }> = {};
     const svcInputs: SvcInput[] = services.map((s) => {
       const unit = num(pf.get(`svc:${s.id}`));
-      const off = pf.get(`svc_off:${s.id}`) === "1";
+      // Dịch vụ riêng của phòng khác thì phòng này không thu
+      const off = (s.roomId !== null && s.roomId !== r.id) || pf.get(`svc_off:${s.id}`) === "1";
       svcPrefs[s.id] = { unit, off };
       return { id: s.id, name: s.name, type: s.type, unit: unit ?? s.price, off, amount: num(mo.get(`svc:${s.id}`)) };
     });
@@ -93,10 +98,10 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     const periodStart = mo.get("p_start") || inv?.period_start || (inv ? addMonths(periodEnd, -1) : autoStart);
 
     const input: RoomInput = {
-      people, rent: Math.round(num(mo.get("rent")) ?? r.rent),
-      elecOld: cur?.elec_old ?? prev?.elec_new ?? 0, elecNew: cur ? cur.elec_new : null,
+      people, vehicles: vehCount.get(r.id) ?? 0, rent: Math.round(num(mo.get("rent")) ?? r.rent),
+      elecOld: cur?.elec_old ?? prev?.elec_new ?? r.elec_start ?? 0, elecNew: cur ? cur.elec_new : null,
       elecPrice: num(pf.get("elec_price")) ?? ePrice,
-      waterMode, waterOld: cur?.water_old ?? prev?.water_new ?? 0, waterNew: cur ? cur.water_new : null,
+      waterMode, waterOld: cur?.water_old ?? prev?.water_new ?? r.water_start ?? 0, waterNew: cur ? cur.water_new : null,
       waterPrice: num(pf.get("water_price")) ?? wPrice,
       services: svcInputs,
       extras: by(extrasT, r.id).map((x) => ({ name: x.name, amount: x.amount })),
@@ -111,7 +116,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       input, auto: { debt: debtAuto, periodStart: autoStart, periodEnd: autoEnd },
       invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: inv.due_date, lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
       prevUsage: prev ? { e: Math.max(0, prev.elec_new - prev.elec_old), w: Math.max(0, prev.water_new - prev.water_old) } : null,
-      hasReading: !!cur,
+      hasReading: !!cur, start: { elec: r.elec_start ?? 0, water: r.water_start ?? 0 },
     });
   }
   return out;

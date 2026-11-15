@@ -16,6 +16,10 @@
 }
 
 html { -webkit-text-size-adjust: 100%; }
+/* Ẩn nút mũi tên lên/xuống trong ô số (đưa chuột hay bị nhảy nhầm số) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Chống phóng to khi chạm vào ô nhập trên iPhone */
 input, select, textarea { font-size: 16px; }
 @media (min-width: 768px) { input, select, textarea { font-size: 14px; } }

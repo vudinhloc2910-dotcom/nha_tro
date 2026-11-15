@@ -54,7 +54,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <label className={labelCls}>Cách tính</label>
                   <select name="type" defaultValue={v.type} className={`${inputCls} w-36`}>
                     <option value="room">Theo phòng</option>
-                    <option value="person">Theo người</option>
+                    <option value="person">Theo người</option><option value="vehicle">Theo xe</option>
                   </select>
                 </div>
                 <div><label className={labelCls}>Giá (đ)</label><input name="price" type="number" min="0" defaultValue={v.price} className={`${inputCls} w-32`} /></div>
@@ -69,7 +69,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div><label className={labelCls}>Dịch vụ mới</label><input name="name" required className={`${inputCls} w-40`} placeholder="VD: Sạc xe điện" /></div>
           <div>
             <label className={labelCls}>Cách tính</label>
-            <select name="type" className={`${inputCls} w-36`}><option value="room">Theo phòng</option><option value="person">Theo người</option></select>
+            <select name="type" className={`${inputCls} w-36`}><option value="room">Theo phòng</option><option value="person">Theo người</option><option value="vehicle">Theo xe</option></select>
           </div>
           <div><label className={labelCls}>Giá (đ)</label><input name="price" type="number" min="0" className={`${inputCls} w-32`} /></div>
           <button className={btnCls}>Thêm</button>

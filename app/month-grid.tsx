@@ -9,11 +9,11 @@ import { CopyButton } from "./copy-button";
 import { RoomEditor } from "./room-editor";
 import { MonthExtras, type LiveThu } from "./month-extras";
 import type { LedgerMonth } from "@/lib/ledgermonth";
-import { computeInvoice, svcAuto, type RoomInput } from "@/lib/calc";
+import { computeInvoice, svcAuto, svcUnitLabel, type RoomInput } from "@/lib/calc";
 import { statusOf, vnd } from "@/lib/format";
 import type { RoomView } from "@/lib/monthdata";
 
-type Svc = { id: number; name: string; type: "room" | "person"; price: number };
+type Svc = { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null };
 type Form = {
   periodStart: string; periodEnd: string; people: string; rent: string;
   elecOld: string; elecNew: string; waterOld: string; waterNew: string;
@@ -43,7 +43,7 @@ function initForm(r: RoomView): Form {
 
 function buildInput(r: RoomView, f: Form, waterMode: "meter" | "person"): RoomInput {
   return {
-    people: Math.max(1, Math.round(num(f.people) ?? 1)), rent: num(f.rent) ?? 0,
+    people: Math.max(1, Math.round(num(f.people) ?? 1)), vehicles: r.input.vehicles, rent: num(f.rent) ?? 0,
     elecOld: num(f.elecOld) ?? 0, elecNew: num(f.elecNew), elecPrice: r.input.elecPrice,
     waterMode, waterOld: num(f.waterOld) ?? 0, waterNew: num(f.waterNew), waterPrice: r.input.waterPrice,
     services: r.input.services.map((s) => ({ ...s, amount: num(f.svc[s.id] ?? "") })),
@@ -108,6 +108,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
     const list = Array.from(document.querySelectorAll<HTMLInputElement>(`input[data-room="${id}"]:not([disabled])`)).filter((i) => i.offsetParent !== null && !i.closest("details:not([open])"));
     const at = list.indexOf(t as HTMLInputElement);
     const next = list[at + (e.key === "ArrowUp" ? -1 : 1)];
+    if (e.key !== "Enter") e.preventDefault(); // mũi tên chỉ để chuyển ô, không làm đổi số
     if (next) { e.preventDefault(); next.focus(); next.select?.(); return; }
     // Hết ô của phòng này (thẻ điện thoại): lưu phòng này rồi nhảy sang ô "số mới" của phòng kế tiếp
     if (e.key === "Enter") {
@@ -250,11 +251,11 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                   </div>
                   {services.map((s) => {
                     const sv = r.input.services.find((x) => x.id === s.id)!;
-                    const auto = svcAuto(sv, Math.max(1, Math.round(num(f.people) ?? 1)));
+                    const auto = svcAuto(sv, Math.max(1, Math.round(num(f.people) ?? 1)), r.input.vehicles);
                     if (sv.off) return null;
                     return (
                       <label key={s.id} className="flex items-center justify-between gap-3 text-sm">
-                        <span>{s.name}<span className="block text-[11px] text-gray-400">{sv.type === "person" ? `${vnd(sv.unit)}/người` : "theo phòng"}</span></span>
+                        <span>{s.name}<span className="block text-[11px] text-gray-400">{sv.type === "room" ? "theo phòng" : `${vnd(sv.unit)}${svcUnitLabel(sv)}`}</span></span>
                         <input type="number" min="0" inputMode="numeric" data-room={r.id} value={f.svc[s.id] ?? ""} placeholder={String(auto)} onChange={(e) => setF(r.id, { svc: { ...f.svc, [s.id]: e.target.value } })} onBlur={() => commit(r.id)} className={`${inp} w-32 text-right`} />
                       </label>
                     );
@@ -370,16 +371,16 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
             ) : null}
             <Row label="Tiền nước" calc tot={T(thu.nuoc)}>{rooms.map((r) => { const c = calc(r); const f = forms[r.id]; return <td key={r.id} className={`${cell} text-right`}>{waterMode === "meter" && num(f.waterNew) === null ? <span className="text-gray-400">—</span> : vnd(c.water)}<div className="text-[11px] text-gray-400">{waterMode === "person" ? `${vnd(r.input.waterPrice)}/người` : `${vnd(r.input.waterPrice)}/m³`}</div></td>; })}</Row>
             {services.map((s) => (
-              <Row key={s.id} label={s.name} tot={T(sumBy((r) => lineSum(r, s.name)))}>
+              <Row key={s.id} label={s.roomId ? `${s.name} (P.${rooms.find((x) => x.id === s.roomId)?.code ?? ""})` : s.name} tot={T(sumBy((r) => lineSum(r, s.name)))}>
                 {rooms.map((r) => {
                   const sv = r.input.services.find((x) => x.id === s.id)!;
                   const f = forms[r.id];
-                  const auto = svcAuto(sv, Math.max(1, Math.round(num(f.people) ?? 1)));
+                  const auto = svcAuto(sv, Math.max(1, Math.round(num(f.people) ?? 1)), r.input.vehicles);
                   if (sv.off) return <td key={r.id} className={`${cell} text-center text-xs text-gray-400`}>Không thu</td>;
                   return (
                     <td key={r.id} className={cell}>
                       <input type="number" min="0" inputMode="numeric" data-room={r.id} value={f.svc[s.id] ?? ""} placeholder={String(auto)} onChange={(e) => setF(r.id, { svc: { ...f.svc, [s.id]: e.target.value } })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} text-right`} />
-                      <div className="mt-0.5 text-right text-[11px] text-gray-400">{sv.type === "person" ? `${vnd(sv.unit)}/người` : "theo phòng"}</div>
+                      <div className="mt-0.5 text-right text-[11px] text-gray-400">{sv.type === "room" ? "theo phòng" : `${vnd(sv.unit)}${svcUnitLabel(sv)}`}</div>
                     </td>
                   );
                 })}

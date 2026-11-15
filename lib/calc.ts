@@ -6,13 +6,13 @@
 import { vnd } from "./format";
 
 export type SvcInput = {
-  id: number; name: string; type: "room" | "person";
+  id: number; name: string; type: "room" | "person" | "vehicle";
   unit: number; // đơn giá đang áp dụng cho phòng này (giá riêng của phòng nếu có, không thì giá chung của nhà)
   off: boolean; // phòng này không thu dịch vụ này
   amount: number | null; // số tiền đặt tay cho riêng tháng này (null = tự tính)
 };
 export type RoomInput = {
-  people: number; rent: number;
+  people: number; vehicles: number; rent: number;
   elecOld: number; elecNew: number | null; elecPrice: number;
   waterMode: "meter" | "person"; waterOld: number; waterNew: number | null; waterPrice: number;
   services: SvcInput[];
@@ -23,8 +23,9 @@ export type RoomInput = {
 };
 export type Line = { label: string; detail: string; amount: number };
 
-export const svcAuto = (s: SvcInput, people: number) => (s.type === "person" ? people * s.unit : s.unit);
-export const svcAmount = (s: SvcInput, people: number) => (s.off ? 0 : s.amount ?? svcAuto(s, people));
+export const svcAuto = (s: SvcInput, people: number, vehicles = 0) => (s.type === "person" ? people * s.unit : s.type === "vehicle" ? vehicles * s.unit : s.unit);
+export const svcAmount = (s: SvcInput, people: number, vehicles = 0) => (s.off ? 0 : s.amount ?? svcAuto(s, people, vehicles));
+export const svcUnitLabel = (s: { type: "room" | "person" | "vehicle" }) => (s.type === "person" ? "/người" : s.type === "vehicle" ? "/xe" : "/phòng");
 
 const dm = (d: string) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : "");
 
@@ -50,8 +51,9 @@ export function computeInvoice(r: RoomInput): { lines: Line[]; total: number; el
   }
   for (const s of r.services) {
     if (s.off) continue;
-    const amount = svcAmount(s, r.people);
+    const amount = svcAmount(s, r.people, r.vehicles);
     if (s.amount === null && s.type === "person") lines.push({ label: s.name, detail: `${r.people} người × ${vnd(s.unit)}`, amount });
+    else if (s.amount === null && s.type === "vehicle") lines.push({ label: s.name, detail: `${r.vehicles} xe × ${vnd(s.unit)}`, amount });
     else lines.push({ label: s.name, detail: "", amount });
   }
   for (const e of r.extras) lines.push({ label: e.name, detail: "Phụ phí phát sinh", amount: e.amount });

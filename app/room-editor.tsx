@@ -5,7 +5,7 @@ import { useState } from "react";
 import { saveRoomProfile } from "./actions";
 import type { RoomView } from "@/lib/monthdata";
 
-type Svc = { id: number; name: string; type: "room" | "person"; price: number };
+type Svc = { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null };
 const s2 = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
 const inp = "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 
@@ -26,6 +26,7 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
   const [f, setF] = useState({
     code: room.code, tenantName: room.tenantName, phone: room.phone, people: String(room.tenantPeople), rent: String(room.rent),
     dueDay: String(room.dueDay), note: room.note, elecPrice: s2(room.prefs.elecPrice), waterPrice: s2(room.prefs.waterPrice),
+    elecStart: String(room.start.elec), waterStart: String(room.start.water),
   });
   const [svc, setSvc] = useState<Record<number, { unit: string; off: boolean }>>(() =>
     Object.fromEntries(services.map((s) => [s.id, { unit: s2(room.prefs.svc[s.id]?.unit), off: !!room.prefs.svc[s.id]?.off }]))
@@ -58,6 +59,13 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
           <div className="sm:col-span-2"><label className={L}>Ghi chú</label><input className={inp} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>
 
+        <h3 className="mb-1 mt-5 text-sm font-semibold">Số điện, nước đầu vào</h3>
+        <p className="mb-2 text-xs text-gray-500">Số đồng hồ lúc khách vào. Dùng làm &quot;số cũ&quot; của tháng đầu tiên khi phòng chưa có chỉ số nào.</p>
+        <div className="mb-1 grid gap-3 sm:grid-cols-2">
+          <div><label className={L}>Số điện đầu vào</label><input className={inp} type="number" min="0" step="0.1" value={f.elecStart} onChange={(e) => set("elecStart", e.target.value)} /></div>
+          <div><label className={L}>Số nước đầu vào</label><input className={inp} type="number" min="0" step="0.1" value={f.waterStart} onChange={(e) => set("waterStart", e.target.value)} /></div>
+        </div>
+
         <h3 className="mb-1 mt-5 text-sm font-semibold">Đơn giá riêng của phòng</h3>
         <p className="mb-2 text-xs text-gray-500">Để trống = dùng giá chung của nhà.</p>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -65,13 +73,13 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
           <div><label className={L}>Giá nước ({room.input.waterMode === "person" ? "đ/người" : "đ/m³"})</label><input className={inp} type="number" min="0" value={f.waterPrice} placeholder={String(room.input.waterPrice)} onChange={(e) => set("waterPrice", e.target.value)} /></div>
         </div>
 
-        {services.length > 0 && (
+        {services.filter((s) => !s.roomId || s.roomId === room.id).length > 0 && (
           <>
             <h3 className="mb-1 mt-5 text-sm font-semibold">Dịch vụ của phòng</h3>
             <div className="space-y-2">
-              {services.map((s) => (
+              {services.filter((s) => !s.roomId || s.roomId === room.id).map((s) => (
                 <div key={s.id} className="grid grid-cols-[1fr_8rem_auto] items-center gap-2">
-                  <span className="text-sm">{s.name} <span className="text-xs text-gray-500">({s.type === "person" ? "theo người" : "theo phòng"})</span></span>
+                  <span className="text-sm">{s.name} <span className="text-xs text-gray-500">({s.type === "person" ? "theo người" : s.type === "vehicle" ? "theo xe" : "theo phòng"})</span></span>
                   <input className={`${inp} text-right`} type="number" min="0" value={svc[s.id].unit} placeholder={String(s.price)} disabled={svc[s.id].off} onChange={(e) => setSvc((p) => ({ ...p, [s.id]: { ...p[s.id], unit: e.target.value } }))} />
                   <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={svc[s.id].off} onChange={(e) => setSvc((p) => ({ ...p, [s.id]: { ...p[s.id], off: e.target.checked } }))} />Không thu</label>
                 </div>
