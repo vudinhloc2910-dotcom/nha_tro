@@ -37,6 +37,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div><label className={labelCls}>Tiền thuê nhà trả chủ (đ/tháng, quy ra mỗi tháng)</label><input name="rent_cost_monthly" type="number" min="0" defaultValue={s.rent_cost_monthly} className={inputCls} /></div>
           <div><label className={labelCls}>Lương quản lý (đ/tháng, 0 = không có)</label><input name="manager_salary" type="number" min="0" defaultValue={s.manager_salary} className={inputCls} /></div>
           <div><label className={labelCls}>Chia lãi (VD: Tài:50, Lộc:50)</label><input name="partners" defaultValue={s.partners} className={inputCls} placeholder="Để trống nếu không chia" /></div>
+          <div className="sm:col-span-3">
+            <label className={labelCls}>Lời nhắn cuối hóa đơn gửi khách</label>
+            <textarea name="invoice_note" rows={3} defaultValue={s.invoice_note} className={inputCls} placeholder="Để trống = dùng lời nhắn mặc định: Trân trọng cảm ơn Quý khách đã tin tưởng và thuê phòng tại … Chúc Quý khách và gia đình một tháng mới thật nhiều sức khỏe, bình an và may mắn!" />
+            <p className="mt-1 text-xs text-gray-500">Gõ {"{nha}"} để tự chèn tên nhà, {"{sdt}"} để chèn số điện thoại chủ trọ, {"{phong}"} để chèn số phòng. Số điện thoại liên hệ tự hiện thêm một dòng bên dưới nếu anh đã nhập ở trên.</p>
+          </div>
           <div><button className={btnCls}>Lưu cài đặt</button></div>
         </form>
       </section>

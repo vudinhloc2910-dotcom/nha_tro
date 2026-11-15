@@ -136,6 +136,7 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
   bank_holder: "VU DINH LOC",
   rent_cost_monthly: "0", // tiền thuê nhà trả chủ, quy ra mỗi tháng (dùng trong báo cáo lãi lỗ)
   manager_salary: "0", // lương quản lý mỗi tháng (0 = nhà không có)
+  invoice_note: "", // lời nhắn cuối hóa đơn gửi khách (để trống = dùng lời nhắn mặc định)
   partners: "", // chia lãi, VD: "Tài:50, Lộc:50" (để trống = không chia)
 };
 

@@ -37,6 +37,11 @@ export default async function PayPage({ params, searchParams }: { params: Promis
     : status === "partial" ? { t: "ĐÃ THU MỘT PHẦN", c: "border-amber-600 text-amber-700" }
     : { t: "CHƯA THANH TOÁN", c: "border-gray-500 text-gray-700" };
   const dash = "border-t border-dashed border-gray-400";
+  // Lời nhắn cuối hóa đơn: chủ trọ tự soạn trong Cài đặt, không có thì dùng lời nhắn mặc định ấm áp
+  const DEFAULT_NOTE = "🌸 Trân trọng cảm ơn Quý khách đã tin tưởng và thuê phòng tại {nha}. Chúc Quý khách và gia đình một tháng mới thật nhiều sức khỏe, bình an và may mắn! 🌸";
+  const rawNote = (s.invoice_note ?? "").trim();
+  const custom_has_phone = rawNote.includes("{sdt}");
+  const note_text = (rawNote || DEFAULT_NOTE).replaceAll("{nha}", s.house_name).replaceAll("{sdt}", s.house_phone || "").replaceAll("{phong}", inv.code);
 
   return (
     <main className="mx-auto max-w-sm px-3 py-5 print:max-w-none print:p-0">
@@ -109,7 +114,10 @@ export default async function PayPage({ params, searchParams }: { params: Promis
         )}
 
         <div className={`${dash} my-4`} />
-        <p className="text-center text-xs text-gray-500">Cảm ơn quý khách! Mọi thắc mắc xin liên hệ chủ trọ{s.house_phone ? `: ${s.house_phone}` : ""}.</p>
+        <div className="space-y-1.5 text-center">
+          <p className="text-sm italic leading-relaxed text-gray-700">{note_text}</p>
+          {s.house_phone && !custom_has_phone && <p className="text-xs text-gray-500">Cần hỗ trợ hoặc có thắc mắc, Quý khách cứ nhắn hoặc gọi chủ trọ: <b className="text-gray-700">{s.house_phone}</b> nhé.</p>}
+        </div>
       </div>
       <div className="no-print mt-4 text-center"><PrintButton label="In hóa đơn / Lưu PDF" /></div>
       <details id="bao-su-co" open={!!sp.issue} className="no-print mt-4 rounded-xl bg-white p-4 text-sm shadow-md">

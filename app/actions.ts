@@ -141,7 +141,7 @@ export async function saveSettings(f: FormData) {
   const name = str(f, "house_name");
   if (!name) back("/settings", { err: "Nhập tên nhà" });
   await run("UPDATE houses SET name=?, address=? WHERE id=?", name, str(f, "house_address"), house.id);
-  const keys = ["house_phone", "elec_price", "water_mode", "water_price", "bank_code", "bank_account", "bank_holder", "rent_cost_monthly", "manager_salary", "partners"];
+  const keys = ["house_phone", "elec_price", "water_mode", "water_price", "bank_code", "bank_account", "bank_holder", "rent_cost_monthly", "manager_salary", "partners", "invoice_note"];
   for (const k of keys) {
     let v = str(f, k);
     if (k === "water_mode" && v !== "meter" && v !== "person") v = "meter";
