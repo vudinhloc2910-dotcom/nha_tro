@@ -294,7 +294,7 @@ export async function deletePayment(f: FormData) {
 
 /* ---------- Bảng hóa đơn tháng (kiểu sheet): lưu một phòng ---------- */
 export type RoomMonthInput = {
-  roomId: number; month: string;
+  roomId: number; houseId: number; month: string;
   people: string; rent: string; periodStart: string; periodEnd: string;
   elecOld: string; elecNew: string; waterOld: string; waterNew: string;
   svc: Record<string, string>; extras: { name: string; amount: string }[];
@@ -317,10 +317,10 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
   await requireAdmin();
   try {
     if (!MONTH_RE.test(inp.month)) return { ok: false, error: "Tháng không hợp lệ" };
-    const room = await one<{ house_id: number; id: number }>("SELECT id, house_id FROM rooms WHERE id=?", Number(inp.roomId));
-    if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+    // houseId do trang gửi lên; loadMonth chỉ trả phòng của nhà đó nên phòng lạ sẽ bị từ chối (đỡ 1 lượt gọi database)
+    const room = { id: Number(inp.roomId), house_id: Number(inp.houseId) };
     const base = (await loadMonth(room.house_id, inp.month)).rooms.find((r) => r.id === room.id);
-    if (!base) return { ok: false, error: "Phòng chưa có khách thuê" };
+    if (!base) return { ok: false, error: "Không tìm thấy phòng, hoặc phòng chưa có khách thuê" };
 
     const eo = toNum(inp.elecOld), en = toNum(inp.elecNew), wo = toNum(inp.waterOld), wn = toNum(inp.waterNew);
     for (const [v, name] of [[eo, "điện cũ"], [en, "điện mới"], [wo, "nước cũ"], [wn, "nước mới"], [toNum(inp.people), "số người"], [toNum(inp.rent), "tiền phòng"], [toNum(inp.discount), "giảm giá"], [toNum(inp.debt), "nợ cũ"]] as const) {
@@ -372,19 +372,15 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
     }
     // Số người là số hiện tại của phòng: nếu đang sửa tháng mới nhất thì cập nhật luôn cho các tháng sau
     if (people !== null) {
-      const latest = await one<{ m: string | null }>("SELECT MAX(month) m FROM invoices WHERE room_id=?", R);
-      if (!latest?.m || M >= latest.m) st.push({ sql: "UPDATE tenants SET people=? WHERE id=?", args: [Math.max(1, Math.round(people)), base.tenantId] });
+      // Điều kiện nằm ngay trong câu lệnh (không cần đọc trước): chỉ cập nhật khi tháng đang sửa là tháng mới nhất của phòng
+      st.push({ sql: "UPDATE tenants SET people=? WHERE id=? AND COALESCE((SELECT MAX(month) FROM invoices WHERE room_id=?), '') <= ?", args: [Math.max(1, Math.round(people)), base.tenantId, R, M] });
     }
     await batch(st);
 
     const fresh = (await loadMonth(room.house_id, M)).rooms.find((r) => r.id === R)!;
-    let invoice = fresh.invoice;
-    if (fresh.hasReading || fresh.invoice) {
-      await saveInvoice(fresh, M, { force: true });
-      const again = (await loadMonth(room.house_id, M)).rooms.find((r) => r.id === R)!;
-      invoice = again.invoice;
-    }
-    return { ok: true, invoice: invoice ? { id: invoice.id, token: invoice.token, total: invoice.total, paid: invoice.paid, due: invoice.due, locked: invoice.locked } : null };
+    if (!(fresh.hasReading || fresh.invoice)) return { ok: true, invoice: null };
+    const saved = await saveInvoice(fresh, M, { force: true, houseId: room.house_id });
+    return { ok: true, invoice: saved };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Không lưu được" };
   }

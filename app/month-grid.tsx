@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { saveRoomMonth, saveRoomProfile, type RoomMonthInput, type SaveResult } from "./actions";
 import { StatusBadge } from "./components";
 import { CopyButton } from "./copy-button";
@@ -57,8 +57,8 @@ const cell = "border-b border-gray-100 px-2 py-1.5 align-top";
 const labelCell = "sticky left-0 z-10 w-36 min-w-[9rem] border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-xs font-semibold uppercase text-gray-600";
 const inp = "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 
-export function MonthGrid({ month, houseName, waterMode, services, rooms, vacant, ledger }: {
-  month: string; houseName: string; waterMode: "meter" | "person"; services: Svc[]; rooms: RoomView[]; vacant: string[]; ledger: LedgerMonth;
+export function MonthGrid({ month, houseId, houseName, waterMode, services, rooms, vacant, ledger }: {
+  month: string; houseId: number; houseName: string; waterMode: "meter" | "person"; services: Svc[]; rooms: RoomView[]; vacant: string[]; ledger: LedgerMonth;
 }) {
   const router = useRouter();
   const [forms, setForms] = useState<Record<number, Form>>(() => Object.fromEntries(rooms.map((r) => [r.id, initForm(r)])));
@@ -84,7 +84,7 @@ export function MonthGrid({ month, houseName, waterMode, services, rooms, vacant
     busy.current[id] = true;
     setSt(id, { state: "saving", msg: "Đang lưu…" });
     const payload: RoomMonthInput = {
-      roomId: id, month, people: f.people, rent: f.rent, periodStart: f.periodStart, periodEnd: f.periodEnd,
+      roomId: id, houseId, month, people: f.people, rent: f.rent, periodStart: f.periodStart, periodEnd: f.periodEnd,
       elecOld: f.elecOld, elecNew: f.elecNew, waterOld: f.waterOld, waterNew: f.waterNew,
       svc: Object.fromEntries(Object.entries(f.svc).map(([k, v]) => [k, v])), extras: f.extras, discount: f.discount, debt: f.debt,
     };
@@ -121,8 +121,15 @@ export function MonthGrid({ month, houseName, waterMode, services, rooms, vacant
     }
   }
 
-  const calc = (r: RoomView) => computeInvoice(buildInput(r, forms[r.id], waterMode));
-  const dirty = (r: RoomView) => JSON.stringify(forms[r.id]) !== saved.current[r.id];
+  // Tính tiền và so sánh "đã sửa chưa" MỘT LẦN cho mỗi phòng sau mỗi lần gõ (trước đây tính lại hàng trăm lần mỗi lần gõ)
+  const calcMap = useMemo(
+    () => Object.fromEntries(rooms.map((r) => [r.id, computeInvoice(buildInput(r, forms[r.id], waterMode))])),
+    [rooms, forms, waterMode]
+  );
+  const dirtyMap: Record<number, boolean> = {};
+  for (const r of rooms) dirtyMap[r.id] = JSON.stringify(forms[r.id]) !== saved.current[r.id];
+  const calc = (r: RoomView) => calcMap[r.id];
+  const dirty = (r: RoomView) => dirtyMap[r.id];
 
   const totals = rooms.reduce((a, r) => {
     const inv = invs[r.id];

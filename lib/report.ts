@@ -1,4 +1,4 @@
-import { all, getSettings } from "./db";
+import { mergeSettings, readAll, type House } from "./db";
 
 export type Partner = { name: string; pct: number };
 export type MonthReport = {
@@ -27,25 +27,23 @@ export function parsePartners(s: string | undefined): Partner[] {
  * - Vốn đầu tư không tính vào lãi lỗ hằng tháng mà tính riêng (để biết bao giờ hòa vốn).
  */
 export async function houseReport(houseId: number, fromMonth: string, toMonth: string): Promise<{ months: MonthReport[]; partners: Partner[]; settings: Record<string, string> }> {
-  const s = await getSettings(houseId);
+  const [h, kv, invR, ledR, useR] = await readAll([
+    { sql: "SELECT id, name, address FROM houses WHERE id=?", args: [houseId] },
+    { sql: "SELECT key,value FROM house_settings WHERE house_id=?", args: [houseId] },
+    { sql: `SELECT i.month, SUM(i.total) billed, SUM(MIN(i.total, COALESCE(p.paid,0))) paid, COUNT(*) rooms
+            FROM invoices i JOIN rooms r ON r.id=i.room_id
+            LEFT JOIN (SELECT invoice_id, SUM(amount) paid FROM payments GROUP BY invoice_id) p ON p.invoice_id=i.id
+            WHERE r.house_id=? AND i.month BETWEEN ? AND ? GROUP BY i.month`, args: [houseId, fromMonth, toMonth] },
+    { sql: "SELECT month, kind, category, name, amount FROM ledger WHERE house_id=? AND month BETWEEN ? AND ? ORDER BY id", args: [houseId, fromMonth, toMonth] },
+    { sql: `SELECT d.month, SUM(MAX(d.elec_new-d.elec_old,0)) kwh, SUM(MAX(d.water_new-d.water_old,0)) m3
+            FROM readings d JOIN rooms r ON r.id=d.room_id WHERE r.house_id=? AND d.month BETWEEN ? AND ? GROUP BY d.month`, args: [houseId, fromMonth, toMonth] },
+  ]);
+  const s = mergeSettings(h[0] as House | undefined, kv as { key: string; value: string }[]);
   const rentMonthly = Number(s.rent_cost_monthly) || 0;
   const salaryMonthly = Number(s.manager_salary) || 0;
-
-  const inv = await all<{ month: string; billed: number; paid: number; rooms: number }>(
-    `SELECT i.month, SUM(i.total) billed, SUM(MIN(i.total, COALESCE(p.paid,0))) paid, COUNT(*) rooms
-     FROM invoices i JOIN rooms r ON r.id=i.room_id
-     LEFT JOIN (SELECT invoice_id, SUM(amount) paid FROM payments GROUP BY invoice_id) p ON p.invoice_id=i.id
-     WHERE r.house_id=? AND i.month BETWEEN ? AND ? GROUP BY i.month`,
-    houseId, fromMonth, toMonth
-  );
-  const led = await all<{ month: string; kind: string; category: string; name: string; amount: number }>(
-    "SELECT month, kind, category, name, amount FROM ledger WHERE house_id=? AND month BETWEEN ? AND ? ORDER BY id", houseId, fromMonth, toMonth
-  );
-  const use = await all<{ month: string; kwh: number; m3: number }>(
-    `SELECT d.month, SUM(MAX(d.elec_new-d.elec_old,0)) kwh, SUM(MAX(d.water_new-d.water_old,0)) m3
-     FROM readings d JOIN rooms r ON r.id=d.room_id WHERE r.house_id=? AND d.month BETWEEN ? AND ? GROUP BY d.month`,
-    houseId, fromMonth, toMonth
-  );
+  const inv = invR as { month: string; billed: number; paid: number; rooms: number }[];
+  const led = ledR as { month: string; kind: string; category: string; name: string; amount: number }[];
+  const use = useR as { month: string; kwh: number; m3: number }[];
   const months = new Set<string>([...inv.map((x) => x.month), ...led.map((x) => x.month)]);
   const out: MonthReport[] = [];
   for (const month of [...months].sort()) {

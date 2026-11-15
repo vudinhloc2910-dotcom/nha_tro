@@ -1,4 +1,4 @@
-import { all, getSettings } from "./db";
+import { mergeSettings, readAll, type House } from "./db";
 import { addMonths, type RoomInput, type SvcInput } from "./calc";
 import { prevMonth } from "./format";
 
@@ -24,42 +24,43 @@ type KV = { room_id: number; key: string; value: string };
 
 /** Đọc toàn bộ dữ liệu một tháng của một nhà (ít truy vấn nhất có thể) và dựng sẵn đầu vào tính tiền cho từng phòng. */
 export async function loadMonth(houseId: number, month: string): Promise<MonthData> {
-  const settings = await getSettings(houseId);
-  const services = await all<{ id: number; name: string; type: "room" | "person"; price: number }>(
-    "SELECT id, name, type, price FROM services WHERE house_id=? AND active=1 ORDER BY id", houseId
-  );
-  const rooms = await all<{ id: number; code: string; rent: number; due_day: number; note: string | null; tid: number | null; tname: string | null; phone: string | null; people: number | null }>(
-    `SELECT r.id, r.code, r.rent, r.due_day, r.note, t.id tid, t.name tname, t.phone, t.people
-     FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`, houseId
-  );
+  const pm = prevMonth(month);
+  // TẤT CẢ truy vấn đọc của tháng được gửi trong MỘT lượt gọi database (nhanh hơn nhiều so với gọi lần lượt)
+  const [h, kv, svc, roomRows, prefs0, rm0, readings, extras, invoices, invLines0, prevInv] = await readAll([
+    { sql: "SELECT id, name, address FROM houses WHERE id=?", args: [houseId] },
+    { sql: "SELECT key, value FROM house_settings WHERE house_id=?", args: [houseId] },
+    { sql: "SELECT id, name, type, price FROM services WHERE house_id=? AND active=1 ORDER BY id", args: [houseId] },
+    { sql: `SELECT r.id, r.code, r.rent, r.due_day, r.note, t.id tid, t.name tname, t.phone, t.people
+            FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`, args: [houseId] },
+    { sql: "SELECT p.room_id, p.key, p.value FROM room_prefs p JOIN rooms r ON r.id=p.room_id WHERE r.house_id=?", args: [houseId] },
+    { sql: "SELECT m.room_id, m.key, m.value FROM room_month m JOIN rooms r ON r.id=m.room_id WHERE m.month=? AND r.house_id=?", args: [month, houseId] },
+    { sql: "SELECT d.room_id, d.month, d.elec_old, d.elec_new, d.water_old, d.water_new FROM readings d JOIN rooms r ON r.id=d.room_id WHERE d.month IN (?,?) AND r.house_id=?", args: [month, pm, houseId] },
+    { sql: "SELECT e.room_id, e.name, e.amount FROM extras e JOIN rooms r ON r.id=e.room_id WHERE e.month=? AND r.house_id=? ORDER BY e.id", args: [month, houseId] },
+    { sql: `SELECT i.id, i.room_id, i.token, i.total, i.due_date, i.period_start, i.locked,
+              COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
+            FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.month=? AND r.house_id=?`, args: [month, houseId] },
+    { sql: `SELECT l.invoice_id, l.label, l.detail, l.amount FROM invoice_lines l JOIN invoices i ON i.id=l.invoice_id
+            JOIN rooms r ON r.id=i.room_id WHERE i.month=? AND r.house_id=? ORDER BY l.id`, args: [month, houseId] },
+    { sql: `SELECT i.room_id, i.total, i.due_date, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
+            FROM invoices i JOIN rooms r ON r.id=i.room_id
+            WHERE r.house_id=? AND i.month=(SELECT MAX(month) FROM invoices WHERE room_id=i.room_id AND month<?)`, args: [houseId, month] },
+  ]);
+  const settings = mergeSettings(h[0] as House | undefined, kv as { key: string; value: string }[]);
+  const services = svc as { id: number; name: string; type: "room" | "person"; price: number }[];
+  const rooms = roomRows as { id: number; code: string; rent: number; due_day: number; note: string | null; tid: number | null; tname: string | null; phone: string | null; people: number | null }[];
   const occupied = rooms.filter((r) => r.tid !== null);
   const vacant = rooms.filter((r) => r.tid === null).map((r) => r.code);
   const out: MonthData = { houseId, month, settings, services, rooms: [], vacant };
   if (occupied.length === 0) return out;
 
-  const ids = occupied.map((r) => Number(r.id)).join(","); // id lấy từ database nên an toàn khi nối chuỗi
-  const prefs = await all<KV>(`SELECT room_id, key, value FROM room_prefs WHERE room_id IN (${ids})`);
-  const rm = await all<KV>(`SELECT room_id, key, value FROM room_month WHERE month=? AND room_id IN (${ids})`, month);
-  const pm = prevMonth(month);
-  const readings = await all<{ room_id: number; month: string; elec_old: number; elec_new: number; water_old: number; water_new: number }>(
-    `SELECT room_id, month, elec_old, elec_new, water_old, water_new FROM readings WHERE month IN (?,?) AND room_id IN (${ids})`, month, pm
-  );
-  const extras = await all<{ room_id: number; name: string; amount: number }>(
-    `SELECT room_id, name, amount FROM extras WHERE month=? AND room_id IN (${ids}) ORDER BY id`, month
-  );
-  const invoices = await all<{ id: number; room_id: number; token: string; total: number; due_date: string; period_start: string | null; locked: number; paid: number }>(
-    `SELECT i.id, i.room_id, i.token, i.total, i.due_date, i.period_start, i.locked,
-       COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
-     FROM invoices i WHERE i.month=? AND i.room_id IN (${ids})`, month
-  );
-  const invLines = invoices.length
-    ? await all<{ invoice_id: number; label: string; detail: string; amount: number }>(
-        `SELECT invoice_id, label, detail, amount FROM invoice_lines WHERE invoice_id IN (${invoices.map((i) => Number(i.id)).join(",")}) ORDER BY id`)
-    : [];
-  const prevInv = await all<{ room_id: number; total: number; due_date: string; paid: number }>(
-    `SELECT i.room_id, i.total, i.due_date, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
-     FROM invoices i WHERE i.room_id IN (${ids}) AND i.month=(SELECT MAX(month) FROM invoices WHERE room_id=i.room_id AND month<?)`, month
-  );
+  const prefs = prefs0 as unknown as KV[];
+  const rm = rm0 as unknown as KV[];
+  const invLines = invLines0 as unknown as { invoice_id: number; label: string; detail: string; amount: number }[];
+  type Rd = { room_id: number; month: string; elec_old: number; elec_new: number; water_old: number; water_new: number };
+  const readingsT = readings as unknown as Rd[];
+  const extrasT = extras as unknown as { room_id: number; name: string; amount: number }[];
+  const invoicesT = invoices as unknown as { id: number; room_id: number; token: string; total: number; due_date: string; period_start: string | null; locked: number; paid: number }[];
+  const prevInvT = prevInv as unknown as { room_id: number; total: number; due_date: string; paid: number }[];
 
   const by = <T extends { room_id: number }>(list: T[], id: number) => list.filter((x) => x.room_id === id);
   const ePrice = Number(settings.elec_price) || 0, wPrice = Number(settings.water_price) || 0;
@@ -69,10 +70,10 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
   for (const r of occupied) {
     const pf = new Map(by(prefs, r.id).map((x) => [x.key, x.value]));
     const mo = new Map(by(rm, r.id).map((x) => [x.key, x.value]));
-    const cur = readings.find((x) => x.room_id === r.id && x.month === month);
-    const prev = readings.find((x) => x.room_id === r.id && x.month === pm);
-    const inv = invoices.find((x) => x.room_id === r.id);
-    const pi = prevInv.find((x) => x.room_id === r.id);
+    const cur = readingsT.find((x) => x.room_id === r.id && x.month === month);
+    const prev = readingsT.find((x) => x.room_id === r.id && x.month === pm);
+    const inv = invoicesT.find((x) => x.room_id === r.id);
+    const pi = prevInvT.find((x) => x.room_id === r.id);
     const num = (v: string | undefined) => (v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
     const svcPrefs: Record<number, { unit: number | null; off: boolean }> = {};
@@ -98,7 +99,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       waterMode, waterOld: cur?.water_old ?? prev?.water_new ?? 0, waterNew: cur ? cur.water_new : null,
       waterPrice: num(pf.get("water_price")) ?? wPrice,
       services: svcInputs,
-      extras: by(extras, r.id).map((x) => ({ name: x.name, amount: x.amount })),
+      extras: by(extrasT, r.id).map((x) => ({ name: x.name, amount: x.amount })),
       discount: Math.abs(num(mo.get("discount")) ?? 0),
       debt: Math.round(num(mo.get("debt")) ?? debtAuto),
       periodStart, periodEnd,

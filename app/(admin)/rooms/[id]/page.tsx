@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { all, one } from "@/lib/db";
+import { all, readAll } from "@/lib/db";
 import { currentMonth, dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
 import { loadMonth } from "@/lib/monthdata";
 import { addRoomExtra, addVehicle, checkoutTenant, deleteRoom, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
@@ -22,22 +22,26 @@ export default async function RoomPage({
   const { id } = await params;
   const sp = await searchParams;
   const tab = TABS.some((t) => t[0] === sp.tab) ? sp.tab! : "info";
-  const room = await one<Room>("SELECT * FROM rooms WHERE id=?", Number(id));
-  if (!room) notFound();
-  const t = await one<Tenant>("SELECT * FROM tenants WHERE room_id=? AND active=1", room.id);
-  const past = await all<{ name: string; move_in: string; move_out: string }>(
-    "SELECT name, move_in, move_out FROM tenants WHERE room_id=? AND active=0 ORDER BY id DESC", room.id
-  );
-  const invoices = await all<Inv>(
-    `SELECT i.id, i.month, i.total, i.due_date, i.locked, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
-     FROM invoices i WHERE i.room_id=? ORDER BY i.month DESC`, room.id
-  );
-  const vehicles = await all<Vehicle>("SELECT id, kind, plate, note FROM vehicles WHERE room_id=? ORDER BY id", room.id);
-  const debt = invoices.reduce((a, i) => a + Math.max(0, i.total - i.paid), 0);
+  const rid = Number(id);
   const month = currentMonth();
+  // Một lượt gọi database cho mọi dữ liệu của phòng
+  const [roomR, tenantR, pastR, invR, vehR] = await readAll([
+    { sql: "SELECT * FROM rooms WHERE id=?", args: [rid] },
+    { sql: "SELECT * FROM tenants WHERE room_id=? AND active=1", args: [rid] },
+    { sql: "SELECT name, move_in, move_out FROM tenants WHERE room_id=? AND active=0 ORDER BY id DESC", args: [rid] },
+    { sql: `SELECT i.id, i.month, i.total, i.due_date, i.locked, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
+            FROM invoices i WHERE i.room_id=? ORDER BY i.month DESC`, args: [rid] },
+    { sql: "SELECT id, kind, plate, note FROM vehicles WHERE room_id=? ORDER BY id", args: [rid] },
+  ]);
+  const room = roomR[0] as Room | undefined;
+  if (!room) notFound();
+  const t = tenantR[0] as Tenant | undefined;
+  const past = pastR as { name: string; move_in: string; move_out: string }[];
+  const invoices = invR as Inv[];
+  const vehicles = vehR as Vehicle[];
+  const debt = invoices.reduce((a, i) => a + Math.max(0, i.total - i.paid), 0);
   const md = await loadMonth(room.house_id, month);
   const view = md.rooms.find((r) => r.id === room.id);
-  const house = await one<{ name: string }>("SELECT name FROM houses WHERE id=?", room.house_id);
 
   return (
     <div className="space-y-4">
@@ -45,7 +49,7 @@ export default async function RoomPage({
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold">Phòng {room.code}</h1>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${!t ? "bg-gray-100 text-gray-700" : debt > 0 ? "bg-amber-100 text-amber-800" : "bg-teal-100 text-teal-800"}`}>{!t ? "Phòng trống" : debt > 0 ? "Còn nợ" : "Đang thuê"}</span>
-        <span className="text-sm text-gray-500">{house?.name}</span>
+        <span className="text-sm text-gray-500">{md.settings.house_name}</span>
         {view && <span className="ml-auto"><RoomEditButton room={view} month={month} services={md.services} /></span>}
       </div>
       <Flash ok={sp.ok} err={sp.err} />

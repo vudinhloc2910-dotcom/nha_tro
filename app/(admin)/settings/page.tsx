@@ -9,8 +9,7 @@ type Svc = { id: number; name: string; type: string; price: number; active: numb
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string }> }) {
   const sp = await searchParams;
   const house = await currentHouse();
-  const s = await getSettings(house.id);
-  const services = await all<Svc>("SELECT * FROM services WHERE house_id=? ORDER BY id", house.id);
+  const [s, services] = await Promise.all([getSettings(house.id), all<Svc>("SELECT * FROM services WHERE house_id=? ORDER BY id", house.id)]);
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold">Cài đặt <span className="text-base font-normal text-gray-600">· {house.name}</span></h1>

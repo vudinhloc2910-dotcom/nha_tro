@@ -1,4 +1,4 @@
-import { all, getSettings } from "./db";
+import { mergeSettings, readAll, type House } from "./db";
 import { parsePartners, type Partner } from "./report";
 
 export type ExpenseItem = { name: string; qty: number; unit: number };
@@ -13,10 +13,13 @@ const parse = <T,>(s: string): Partial<T> => { try { return JSON.parse(s) as Par
 
 /** Sổ thu chi của một nhà trong một tháng: chi phí phát sinh, thu phòng mới, chi theo từng khoản. */
 export async function loadLedgerMonth(houseId: number, month: string): Promise<LedgerMonth> {
-  const rows = await all<{ kind: string; category: string; name: string; amount: number; meta: string }>(
-    "SELECT kind, category, name, amount, meta FROM ledger WHERE house_id=? AND month=? ORDER BY id", houseId, month
-  );
-  const s = await getSettings(houseId);
+  const [lg, hr, kv] = await readAll([
+    { sql: "SELECT kind, category, name, amount, meta FROM ledger WHERE house_id=? AND month=? ORDER BY id", args: [houseId, month] },
+    { sql: "SELECT id, name, address FROM houses WHERE id=?", args: [houseId] },
+    { sql: "SELECT key, value FROM house_settings WHERE house_id=?", args: [houseId] },
+  ]);
+  const rows = lg as { kind: string; category: string; name: string; amount: number; meta: string }[];
+  const s = mergeSettings(hr[0] as House | undefined, kv as { key: string; value: string }[]);
   const sum = (c: string) => rows.filter((r) => r.kind === "chi" && r.category === c).reduce((a, r) => a + r.amount, 0);
   return {
     items: rows.filter((r) => r.kind === "chi" && ["phat_sinh", "luong", "dau_tu"].includes(r.category)).map((r) => {

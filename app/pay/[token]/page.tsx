@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { all, getSettings, one } from "@/lib/db";
+import { getSettings, one, readAll } from "@/lib/db";
 import { dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
 import { PrintButton } from "../../print-button";
 import { reportIssue } from "../../actions";
@@ -14,9 +14,15 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   if (!/^[0-9a-f]{24}$/.test(token)) notFound();
   const inv = await one<Inv>("SELECT i.*, r.code, r.house_id FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE i.token=?", token);
   if (!inv) notFound();
-  const s = await getSettings(inv.house_id);
-  const lines = await all<{ label: string; detail: string; amount: number }>("SELECT * FROM invoice_lines WHERE invoice_id=? ORDER BY id", inv.id);
-  const payments = await all<{ amount: number; paid_at: string; method: string }>("SELECT amount, paid_at, method FROM payments WHERE invoice_id=? ORDER BY paid_at, id", inv.id);
+  const [s, [linesR, paymentsR]] = await Promise.all([
+    getSettings(inv.house_id),
+    readAll([
+      { sql: "SELECT label, detail, amount FROM invoice_lines WHERE invoice_id=? ORDER BY id", args: [inv.id] },
+      { sql: "SELECT amount, paid_at, method FROM payments WHERE invoice_id=? ORDER BY paid_at, id", args: [inv.id] },
+    ]),
+  ]);
+  const lines = linesR as { label: string; detail: string; amount: number }[];
+  const payments = paymentsR as { amount: number; paid_at: string; method: string }[];
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remain = Math.max(0, inv.total - paid);
   const status = statusOf(inv.total, paid, inv.due_date);

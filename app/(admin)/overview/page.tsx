@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { all, listHouses } from "@/lib/db";
+import { listHouses, readAll } from "@/lib/db";
 import { ago, recentActivity, type ActKind } from "@/lib/activity";
 import { loadAlerts } from "@/lib/alerts";
 import { currentMonth, dateVN, monthLabel, vnd } from "@/lib/format";
@@ -30,33 +30,34 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
   const houses = await listHouses();
   const cur = await currentHouse();
-  const todos = await houseTodos(cur.id);
-  const inv = await all<{ house_id: number; billed: number; paid: number }>(
-    `SELECT r.house_id, SUM(i.total) billed, SUM(MIN(i.total, COALESCE(p.paid,0))) paid
-     FROM invoices i JOIN rooms r ON r.id=i.room_id
-     LEFT JOIN (SELECT invoice_id, SUM(amount) paid FROM payments GROUP BY invoice_id) p ON p.invoice_id=i.id
-     WHERE i.month=? GROUP BY r.house_id`, month
-  );
-  const rooms = await all<{ house_id: number; rooms: number; occupied: number }>(
-    `SELECT r.house_id, COUNT(*) rooms, SUM(CASE WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.room_id=r.id AND t.active=1) THEN 1 ELSE 0 END) occupied
-     FROM rooms r GROUP BY r.house_id`
-  );
-  const rows: (Row & { name: string; profit: number | null })[] = [];
-  for (const h of houses) {
-    const i = inv.find((x) => x.house_id === h.id);
+  // Tải song song: tất cả cùng lúc thay vì lần lượt (database ở xa, mỗi lượt gọi tốn thời gian)
+  const [todos, [invR, roomsR, issuesR], reports, al, acts] = await Promise.all([
+    houseTodos(cur.id),
+    readAll([
+      { sql: `SELECT r.house_id, SUM(i.total) billed, SUM(MIN(i.total, COALESCE(p.paid,0))) paid
+              FROM invoices i JOIN rooms r ON r.id=i.room_id
+              LEFT JOIN (SELECT invoice_id, SUM(amount) paid FROM payments GROUP BY invoice_id) p ON p.invoice_id=i.id
+              WHERE i.month=? GROUP BY r.house_id`, args: [month] },
+      { sql: `SELECT r.house_id, COUNT(*) rooms, SUM(CASE WHEN EXISTS (SELECT 1 FROM tenants t WHERE t.room_id=r.id AND t.active=1) THEN 1 ELSE 0 END) occupied
+              FROM rooms r GROUP BY r.house_id` },
+      { sql: `SELECT i.id, r.code, i.room_id, h.name house, i.title, i.status, i.created FROM issues i JOIN houses h ON h.id=i.house_id
+              LEFT JOIN rooms r ON r.id=i.room_id WHERE i.status<>'done' ORDER BY i.id DESC LIMIT 20` },
+    ]),
+    Promise.all(houses.map((h) => houseReport(h.id, month, month))),
+    loadAlerts(),
+    recentActivity(15),
+  ]);
+  const inv = invR as { house_id: number; billed: number; paid: number }[];
+  const rooms = roomsR as { house_id: number; rooms: number; occupied: number }[];
+  const issues = issuesR as { id: number; code: string | null; room_id: number | null; house: string; title: string; status: string; created: string }[];
+  const rows: (Row & { name: string; profit: number | null })[] = houses.map((h, i) => {
+    const iv = inv.find((x) => x.house_id === h.id);
     const r = rooms.find((x) => x.house_id === h.id);
-    const rep = await houseReport(h.id, month, month);
-    rows.push({ house_id: h.id, name: h.name, billed: i?.billed ?? 0, paid: i?.paid ?? 0, rooms: r?.rooms ?? 0, occupied: r?.occupied ?? 0, profit: rep.months[0]?.profit ?? null });
-  }
+    return { house_id: h.id, name: h.name, billed: iv?.billed ?? 0, paid: iv?.paid ?? 0, rooms: r?.rooms ?? 0, occupied: r?.occupied ?? 0, profit: reports[i].months[0]?.profit ?? null };
+  });
   const billed = rows.reduce((a, r) => a + r.billed, 0), paid = rows.reduce((a, r) => a + r.paid, 0);
   const totalRooms = rows.reduce((a, r) => a + r.rooms, 0), occ = rows.reduce((a, r) => a + r.occupied, 0);
   const profit = rows.reduce((a, r) => a + (r.profit ?? 0), 0);
-  const al = await loadAlerts();
-  const issues = await all<{ id: number; code: string | null; room_id: number | null; house: string; title: string; status: string; created: string }>(
-    `SELECT i.id, r.code, i.room_id, h.name house, i.title, i.status, i.created FROM issues i JOIN houses h ON h.id=i.house_id
-     LEFT JOIN rooms r ON r.id=i.room_id WHERE i.status<>'done' ORDER BY i.id DESC LIMIT 20`
-  );
-  const acts = await recentActivity(15);
   const now = Date.now();
   const overdueTotal = al.overdue.reduce((a, o) => a + o.amount, 0);
 

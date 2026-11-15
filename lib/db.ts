@@ -1,5 +1,6 @@
 import type { Client, InValue } from "@libsql/client";
 import fs from "node:fs";
+import { cache } from "react";
 
 /**
  * Database: libSQL (SQLite). Chạy trên máy = file data/nhatro.db.
@@ -130,8 +131,23 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
   partners: "", // chia lãi, VD: "Tài:50, Lộc:50" (để trống = không chia)
 };
 
+/**
+ * Phiên bản cấu trúc database. Khi thêm bảng/cột mới trong init() thì TĂNG số này, để lần chạy đầu tiên nâng cấp một lần.
+ * Các lần sau chỉ tốn 1 truy vấn kiểm tra (thay vì ~25 truy vấn mỗi lần khởi động máy chủ).
+ */
+const SCHEMA_VERSION = "10";
+
 async function init() {
   const c = await getClient();
+  try {
+    const v = await c.execute("SELECT value FROM settings WHERE key='schema_v'");
+    if (v.rows.length && String(v.rows[0].value) === SCHEMA_VERSION) return;
+  } catch { /* chưa có bảng: database mới, chạy khởi tạo đầy đủ */ }
+  await initFull(c);
+  await c.execute({ sql: "INSERT INTO settings(key,value) VALUES ('schema_v',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: [SCHEMA_VERSION] });
+}
+
+async function initFull(c: Client) {
   await c.executeMultiple(SCHEMA);
 
   // Nâng cấp database cũ: thêm cột "locked" (hóa đơn nhập từ sheet, không tự tính lại)
@@ -247,8 +263,11 @@ export async function pingDb(): Promise<void> {
 }
 
 type P = InValue;
+const TRACE = !!process.env.DB_TRACE;
+const trace = (what: string) => { if (TRACE) console.log(`[db] ${what.replace(/\s+/g, " ").slice(0, 90)}`); };
 export async function all<T = Record<string, unknown>>(sql: string, ...p: P[]): Promise<T[]> {
   const c = await ready();
+  trace(sql);
   const r = await c.execute({ sql, args: p });
   return r.rows.map((row) => ({ ...row })) as unknown as T[];
 }
@@ -257,24 +276,49 @@ export async function one<T = Record<string, unknown>>(sql: string, ...p: P[]): 
 }
 export async function run(sql: string, ...p: P[]) {
   const c = await ready();
+  trace(sql);
   const r = await c.execute({ sql, args: p });
   return { lastInsertRowid: Number(r.lastInsertRowid ?? 0), changes: r.rowsAffected };
 }
 /** Chạy nhiều lệnh trong 1 giao dịch (hoặc cả nhóm thành công, hoặc không gì cả). */
 export async function batch(stmts: { sql: string; args?: P[] }[]) {
   const c = await ready();
+  trace(`BATCH x${stmts.length}`);
   await c.batch(stmts.map((s) => ({ sql: s.sql, args: s.args ?? [] })), "write");
 }
+/** Như batch nhưng trả về kết quả từng lệnh (dòng dữ liệu), để vừa ghi vừa đọc trong 1 lượt gọi mạng. */
+export async function batchRows(stmts: { sql: string; args?: P[] }[]): Promise<Record<string, unknown>[][]> {
+  const c = await ready();
+  trace(`BATCH x${stmts.length}`);
+  const rs = await c.batch(stmts.map((s) => ({ sql: s.sql, args: s.args ?? [] })), "write");
+  return rs.map((r) => r.rows.map((row) => ({ ...row })));
+}
+/**
+ * Đọc NHIỀU truy vấn trong 1 lượt gọi mạng. Database ở xa nên mỗi lượt gọi tốn vài chục đến vài trăm mili giây:
+ * gom lại thay vì gọi lần lượt từng cái là cách làm web nhanh nhất.
+ */
+export async function readAll(queries: { sql: string; args?: P[] }[]): Promise<Record<string, unknown>[][]> {
+  const c = await ready();
+  trace(`READ x${queries.length}`);
+  const rs = await c.batch(queries.map((q) => ({ sql: q.sql, args: q.args ?? [] })), "read");
+  return rs.map((r) => r.rows.map((row) => ({ ...row })));
+}
 export type House = { id: number; name: string; address: string };
-export async function listHouses(): Promise<House[]> {
-  return all<House>("SELECT id, name, address FROM houses ORDER BY sort, id");
+// cache(): trong cùng một lần hiển thị trang, nhiều nơi gọi cũng chỉ truy vấn 1 lần
+export const listHouses = cache(async (): Promise<House[]> => all<House>("SELECT id, name, address FROM houses ORDER BY sort, id"));
+/** Ghép cài đặt của một nhà từ các dòng đã đọc (dùng chung cho getSettings và loadMonth). */
+export function mergeSettings(house: House | undefined, rows: { key: string; value: string }[]): Record<string, string> {
+  const out: Record<string, string> = { ...HOUSE_DEFAULTS };
+  out.house_name = house?.name ?? "Nhà trọ";
+  out.house_address = house?.address ?? "";
+  for (const r of rows) out[r.key] = r.value;
+  return out;
 }
 /** Cài đặt của MỘT nhà (đã gồm giá trị mặc định + tên, địa chỉ nhà). */
 export async function getSettings(houseId: number): Promise<Record<string, string>> {
-  const out: Record<string, string> = { ...HOUSE_DEFAULTS };
-  const h = await one<House>("SELECT id, name, address FROM houses WHERE id=?", houseId);
-  out.house_name = h?.name ?? "Nhà trọ";
-  out.house_address = h?.address ?? "";
-  for (const r of await all<{ key: string; value: string }>("SELECT key,value FROM house_settings WHERE house_id=?", houseId)) out[r.key] = r.value;
-  return out;
+  const [h, kv] = await readAll([
+    { sql: "SELECT id, name, address FROM houses WHERE id=?", args: [houseId] },
+    { sql: "SELECT key,value FROM house_settings WHERE house_id=?", args: [houseId] },
+  ]);
+  return mergeSettings(h[0] as House | undefined, kv as { key: string; value: string }[]);
 }

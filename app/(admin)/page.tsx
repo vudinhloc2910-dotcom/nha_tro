@@ -29,6 +29,7 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Prom
       <MonthGrid
         key={`${house.id}-${month}-${JSON.stringify(md.rooms)}`}
         month={month}
+        houseId={house.id}
         houseName={house.name}
         waterMode={md.settings.water_mode === "person" ? "person" : "meter"}
         services={md.services}

@@ -1,4 +1,4 @@
-import { all } from "./db";
+import { readAll } from "./db";
 import { today } from "./format";
 
 export type RoomStatus = "ok" | "vacant" | "debt" | "overdue";
@@ -31,15 +31,15 @@ export function floorOf(code: string): { n: number; label: string } {
 
 /** Danh sách phòng của một nhà kèm trạng thái: đang thuê, trống, nợ tiền, quá hạn. */
 export async function roomTiles(houseId: number): Promise<RoomTile[]> {
-  const rooms = await all<{ id: number; code: string; rent: number; floor_label: string; kind: string; tname: string | null; phone: string | null; people: number | null; last_out: string | null }>(
-    `SELECT r.id, r.code, r.rent, r.floor_label, r.kind, t.name tname, t.phone, t.people,
-       (SELECT MAX(x.move_out) FROM tenants x WHERE x.room_id=r.id AND x.active=0) last_out
-     FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`, houseId
-  );
-  const inv = await all<{ room_id: number; total: number; due_date: string; paid: number }>(
-    `SELECT i.room_id, i.total, i.due_date, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
-     FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE r.house_id=?`, houseId
-  );
+  const [roomsR, invR] = await readAll([
+    { sql: `SELECT r.id, r.code, r.rent, r.floor_label, r.kind, t.name tname, t.phone, t.people,
+              (SELECT MAX(x.move_out) FROM tenants x WHERE x.room_id=r.id AND x.active=0) last_out
+            FROM rooms r LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1 WHERE r.house_id=? ORDER BY r.code`, args: [houseId] },
+    { sql: `SELECT i.room_id, i.total, i.due_date, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
+            FROM invoices i JOIN rooms r ON r.id=i.room_id WHERE r.house_id=?`, args: [houseId] },
+  ]);
+  const rooms = roomsR as { id: number; code: string; rent: number; floor_label: string; kind: string; tname: string | null; phone: string | null; people: number | null; last_out: string | null }[];
+  const inv = invR as { room_id: number; total: number; due_date: string; paid: number }[];
   const t0 = today();
   const out: RoomTile[] = rooms.map((r) => {
     const mine = inv.filter((i) => i.room_id === r.id && i.total - i.paid > 0);
