@@ -1,7 +1,7 @@
 import { currentHouse } from "@/lib/house";
 import { vnd } from "@/lib/format";
 import { roomTiles } from "@/lib/rooms";
-import { addRoom, createRoomsByFloor, importRoomsPaste } from "../../actions";
+import { addRoom, createFloor, createRoomsByFloor, importRoomsPaste } from "../../actions";
 import { Flash } from "../../components";
 import { RoomMap } from "../../room-map";
 import { accent, btnCls, cardCls, inputCls, labelCls } from "@/lib/ui";
@@ -50,6 +50,20 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
           <div><label className={labelCls}>Giá thuê chung (đ)</label><input name="rent" type="number" min="0" className={inputCls} placeholder="Sửa lại từng phòng sau" /></div>
           <div className="flex items-end"><button className={`${btnCls} w-full`}>Tạo phòng</button></div>
         </form>
+      </section>
+
+      <section className={cardCls}>
+        <h2 className="mb-1 font-semibold">Thêm tầng hoặc khu đặc thù</h2>
+        <p className="mb-3 text-xs text-gray-500">Dùng cho tầng trệt, tầng lửng, mặt bằng kinh doanh, kho... Đặt tên tầng/khu, rồi gõ tên các phòng (cách nhau bằng dấu phẩy), hoặc nhập số lượng để tự đánh số.</p>
+        <form action={createFloor} className="grid gap-3 sm:grid-cols-6">
+          <div className="sm:col-span-2"><label className={labelCls}>Tên tầng / khu</label><input name="floor" required className={inputCls} placeholder="VD: Tầng trệt, Mặt bằng kinh doanh" list="floor-suggest" /></div>
+          <div className="sm:col-span-4"><label className={labelCls}>Tên các phòng (cách nhau bằng dấu phẩy)</label><input name="names" className={inputCls} placeholder="VD: MB1, MB2, Kho" /></div>
+          <div><label className={labelCls}>Hoặc số lượng</label><input name="count" type="number" min="0" max="40" className={inputCls} /></div>
+          <div><label className={labelCls}>Tiền tố</label><input name="prefix" className={inputCls} placeholder="VD: T" /></div>
+          <div className="sm:col-span-2"><label className={labelCls}>Giá thuê chung (đ)</label><input name="rent" type="number" min="0" className={inputCls} /></div>
+          <div className="flex items-end sm:col-span-2"><button className={`${btnCls} w-full`}>Thêm vào nhà</button></div>
+        </form>
+        <datalist id="floor-suggest"><option value="Tầng hầm" /><option value="Tầng trệt" /><option value="Tầng lửng" /><option value="Mặt bằng kinh doanh" /><option value="Sân thượng" /></datalist>
       </section>
 
       <section className={cardCls}>

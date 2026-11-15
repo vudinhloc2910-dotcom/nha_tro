@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { addRoomToFloor } from "./actions";
 import { vnd } from "@/lib/format";
 import type { RoomTile } from "@/lib/rooms";
 
@@ -60,16 +61,27 @@ export function RoomMap({ rooms }: { rooms: RoomTile[] }) {
       {floors.length === 0 && <p className="rounded-2xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">Không có phòng nào khớp.</p>}
       {floors.map((fl) => (
         <section key={fl.label}>
-          <h2 className="mb-2 flex items-baseline gap-2 text-base font-bold">{fl.label}
-            <span className="text-xs font-normal text-gray-500">{fl.all.length} phòng{fl.all.some((r) => r.status === "vacant") ? ` · ${fl.all.filter((r) => r.status === "vacant").length} trống` : ""}</span>
-          </h2>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-baseline gap-2 text-base font-bold">{fl.label}
+              <span className="text-xs font-normal text-gray-500">{fl.all.length} phòng{fl.all.some((r) => r.status === "vacant") ? ` · ${fl.all.filter((r) => r.status === "vacant").length} trống` : ""}</span>
+            </h2>
+            <details className="relative">
+              <summary className="cursor-pointer list-none rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-medium text-brand-800 hover:bg-brand-50">+ Thêm phòng</summary>
+              <form action={addRoomToFloor} className="absolute right-0 z-20 mt-1 flex w-64 items-center gap-2 rounded-xl border border-stone-200 bg-white p-2 shadow-lg">
+                <input type="hidden" name="floor" value={fl.label} />
+                <input name="code" placeholder="Tên phòng (bỏ trống = tự đặt)" className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+                <button className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white">Thêm</button>
+              </form>
+            </details>
+          </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {fl.list.map((r) => (
               <Link key={r.id} href={`/rooms/${r.id}`} className={`block rounded-2xl border-2 p-3 transition ${TILE[r.status]}`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-lg font-extrabold">{r.code}</span>
+                  <span className="truncate text-lg font-extrabold">{r.code}</span>
                   <span className={`h-2.5 w-2.5 rounded-full ${DOT[r.status]}`} />
                 </div>
+                {r.kind && <div className="truncate text-[11px] text-gray-500">{r.kind}</div>}
                 <div className="mt-0.5 truncate text-sm text-gray-700">{r.tenant ?? <span className="text-gray-400">Trống{r.vacantDays !== null ? ` ${r.vacantDays} ngày` : ""}</span>}</div>
                 <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
                   <span>{r.people ? `${r.people} người` : " "}</span>

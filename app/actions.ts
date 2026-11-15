@@ -74,7 +74,11 @@ export async function saveRoom(f: FormData) {
   await requireAdmin();
   const id = num(f, "id");
   const due = Math.min(31, Math.max(1, num(f, "due_day") || 15));
-  await run("UPDATE rooms SET rent=?, due_day=?, note=? WHERE id=?", Math.max(0, num(f, "rent")), due, str(f, "note"), id);
+  const cur = await one<{ house_id: number; code: string }>("SELECT house_id, code FROM rooms WHERE id=?", id);
+  if (!cur) back("/rooms", { err: "Không tìm thấy phòng" });
+  const code = str(f, "code").slice(0, 30) || cur!.code;
+  if (code !== cur!.code && (await one("SELECT id FROM rooms WHERE house_id=? AND code=? AND id<>?", cur!.house_id, code, id))) back(`/rooms/${id}`, { err: `Tên "${code}" đã có phòng khác dùng` });
+  await run("UPDATE rooms SET code=?, floor_label=?, kind=?, rent=?, due_day=?, note=? WHERE id=?", code, str(f, "floor_label").slice(0, 40), str(f, "kind").slice(0, 40), Math.max(0, num(f, "rent")), due, str(f, "note"), id);
   refresh();
   back(`/rooms/${id}`, { ok: "Đã lưu phòng" });
 }
@@ -686,4 +690,82 @@ export async function deleteLedgerEntry(f: FormData) {
   await run("DELETE FROM ledger WHERE id=? AND house_id=?", num(f, "id"), house.id);
   refresh();
   back("/ledger", { ok: "Đã xóa", year: str(f, "year") });
+}
+
+/* ---------- Thêm, đổi tên, xóa phòng linh hoạt ---------- */
+const nextCodeInFloor = (codes: string[], floorLabel: string) => {
+  const m = floorLabel.match(/^T[aầ]ng\s*(\d+)/i);
+  if (m) {
+    const base = Number(m[1]) * 100;
+    const used = codes.map(Number).filter((n) => Number.isFinite(n) && n > base && n < base + 100);
+    return String((used.length ? Math.max(...used) : base) + 1);
+  }
+  return "";
+};
+
+/** Thêm một phòng vào một tầng/khu có sẵn. Để trống tên thì tự đặt số tiếp theo của tầng. */
+export async function addRoomToFloor(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  const floor = str(f, "floor").slice(0, 40);
+  const codes = (await all<{ code: string }>("SELECT code FROM rooms WHERE house_id=?", house.id)).map((r) => r.code);
+  const code = (str(f, "code") || nextCodeInFloor(codes, floor)).slice(0, 30);
+  if (!code) back("/rooms", { err: `Nhập tên phòng cho "${floor}"` });
+  if (codes.includes(code)) back("/rooms", { err: `Phòng "${code}" đã có` });
+  const last = await one<{ rent: number }>("SELECT rent FROM rooms WHERE house_id=? ORDER BY id DESC LIMIT 1", house.id);
+  await run("INSERT INTO rooms(house_id, code, rent, due_day, floor_label) VALUES (?,?,?,15,?)", house.id, code, last?.rent ?? 0, floor);
+  refresh();
+  back("/rooms", { ok: `Đã thêm phòng ${code} vào ${floor || "nhà"}` });
+}
+
+/** Thêm một tầng/khu mới với tên đặc thù (Tầng trệt, Tầng lửng, Mặt bằng kinh doanh...) và danh sách phòng tự đặt tên. */
+export async function createFloor(f: FormData) {
+  await requireAdmin();
+  const house = await currentHouse();
+  const floor = str(f, "floor").slice(0, 40);
+  if (!floor) back("/rooms", { err: "Nhập tên tầng hoặc khu" });
+  const names = str(f, "names").split(/[\n,;]/).map((s) => s.trim().slice(0, 30)).filter(Boolean);
+  const count = Math.min(40, Math.max(0, Math.round(num(f, "count"))));
+  const prefix = str(f, "prefix").slice(0, 10);
+  const list = names.length ? names : Array.from({ length: count }, (_, i) => `${prefix}${i + 1}`);
+  if (!list.length) back("/rooms", { err: "Nhập tên các phòng (cách nhau bằng dấu phẩy) hoặc số lượng phòng" });
+  const have = new Set((await all<{ code: string }>("SELECT code FROM rooms WHERE house_id=?", house.id)).map((r) => r.code));
+  const rent = Math.max(0, Math.round(num(f, "rent")));
+  const st: { sql: string; args: (string | number)[] }[] = [];
+  let skipped = 0;
+  for (const code of list) {
+    if (have.has(code)) { skipped++; continue; }
+    have.add(code);
+    st.push({ sql: "INSERT INTO rooms(house_id, code, rent, due_day, floor_label) VALUES (?,?,?,15,?)", args: [house.id, code, rent, floor] });
+  }
+  if (st.length) await batch(st);
+  refresh();
+  back("/rooms", st.length ? { ok: `Đã thêm ${st.length} phòng vào "${floor}"${skipped ? `, bỏ qua ${skipped} tên đã có` : ""}` } : { err: "Các tên này đã có hết" });
+}
+
+/** Xóa phòng. Phòng đã có hóa đơn chỉ xóa khi chủ trọ tích xác nhận mất cả lịch sử. */
+export async function deleteRoom(f: FormData) {
+  await requireAdmin();
+  const id = num(f, "id");
+  const r = await one<{ code: string; house_id: number }>("SELECT code, house_id FROM rooms WHERE id=?", id);
+  if (!r) back("/rooms", { err: "Không tìm thấy phòng" });
+  const inv = Number((await one<{ c: number }>("SELECT COUNT(*) c FROM invoices WHERE room_id=?", id))?.c ?? 0);
+  const pay = Number((await one<{ c: number }>("SELECT COUNT(*) c FROM payments WHERE invoice_id IN (SELECT id FROM invoices WHERE room_id=?)", id))?.c ?? 0);
+  if ((inv > 0 || pay > 0) && f.get("confirm") !== "1") back(`/rooms/${id}`, { err: `Phòng ${r!.code} đã có ${inv} hóa đơn. Tích ô xác nhận mất lịch sử nếu vẫn muốn xóa.` });
+  await batch([
+    { sql: "DELETE FROM payments WHERE invoice_id IN (SELECT id FROM invoices WHERE room_id=?)", args: [id] },
+    { sql: "DELETE FROM invoice_lines WHERE invoice_id IN (SELECT id FROM invoices WHERE room_id=?)", args: [id] },
+    { sql: "DELETE FROM invoices WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM readings WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM extras WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM room_month WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM room_prefs WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM vehicles WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM tenants WHERE room_id=?", args: [id] },
+    { sql: "UPDATE issues SET room_id=NULL WHERE room_id=?", args: [id] },
+    { sql: "UPDATE activity SET room_id=NULL WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM rooms WHERE id=?", args: [id] },
+  ]);
+  refresh();
+  back("/rooms", { ok: `Đã xóa phòng ${r!.code}` });
 }

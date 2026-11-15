@@ -3,12 +3,12 @@ import { notFound } from "next/navigation";
 import { all, one } from "@/lib/db";
 import { currentMonth, dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
 import { loadMonth } from "@/lib/monthdata";
-import { addRoomExtra, addVehicle, checkoutTenant, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
+import { addRoomExtra, addVehicle, checkoutTenant, deleteRoom, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
 import { Flash, StatusBadge } from "../../../components";
 import { RoomEditButton } from "../../../room-editor";
 import { accent, btnCls, btnDangerCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
 
-type Room = { id: number; house_id: number; code: string; rent: number; due_day: number; note: string };
+type Room = { id: number; house_id: number; code: string; rent: number; due_day: number; note: string; floor_label: string; kind: string };
 type Tenant = { name: string; phone: string; people: number; move_in: string; deposit: number; contract_end: string | null; residence_done: number };
 type Vehicle = { id: number; kind: string; plate: string; note: string };
 type Inv = { id: number; month: string; total: number; due_date: string; locked: number; paid: number };
@@ -69,11 +69,16 @@ export default async function RoomPage({
             <h2 className="mb-3 font-semibold">Thông tin phòng</h2>
             <form action={saveRoom} className="grid gap-3 sm:grid-cols-4">
               <input type="hidden" name="id" value={room.id} />
+              <div className="sm:col-span-2"><label className={labelCls}>Tên / số phòng</label><input name="code" required defaultValue={room.code} className={inputCls} placeholder="VD: 201, Mặt bằng 1, Tầng lửng" /></div>
+              <div><label className={labelCls}>Tầng / khu</label><input name="floor_label" defaultValue={room.floor_label ?? ""} list="floor-suggest" className={inputCls} placeholder="Để trống = tự theo số phòng" /></div>
+              <div><label className={labelCls}>Loại</label><input name="kind" defaultValue={room.kind ?? ""} list="kind-suggest" className={inputCls} placeholder="VD: Phòng trọ" /></div>
               <div><label className={labelCls}>Giá thuê (đ)</label><input name="rent" type="number" min="0" defaultValue={room.rent} className={inputCls} /></div>
               <div><label className={labelCls}>Hạn đóng (ngày trong tháng)</label><input name="due_day" type="number" min="1" max="31" defaultValue={room.due_day} className={inputCls} /></div>
               <div className="sm:col-span-2"><label className={labelCls}>Ghi chú</label><input name="note" defaultValue={room.note ?? ""} className={inputCls} /></div>
               <div><button className={btnCls}>Lưu phòng</button></div>
             </form>
+            <datalist id="floor-suggest"><option value="Tầng hầm" /><option value="Tầng trệt" /><option value="Tầng lửng" /><option value="Mặt bằng kinh doanh" /><option value="Sân thượng" /></datalist>
+            <datalist id="kind-suggest"><option value="Phòng trọ" /><option value="Mặt bằng kinh doanh" /><option value="Kho" /><option value="Văn phòng" /><option value="Phòng chung" /></datalist>
           </section>
 
           <section className={cardCls}>
@@ -120,6 +125,16 @@ export default async function RoomPage({
               </form>
             </section>
           )}
+
+          <section className="rounded-2xl border border-red-200 bg-red-50/40 p-4">
+            <h2 className="mb-1 font-semibold text-red-800">Xóa phòng này</h2>
+            <p className="mb-3 text-xs text-gray-600">{invoices.length > 0 ? `Phòng đã có ${invoices.length} hóa đơn. Xóa sẽ mất cả khách, hóa đơn, chỉ số điện nước và lịch sử thu tiền của phòng, không khôi phục được.` : "Phòng chưa có hóa đơn nào, xóa không mất dữ liệu thu tiền."}</p>
+            <form action={deleteRoom} className="flex flex-wrap items-center gap-3">
+              <input type="hidden" name="id" value={room.id} />
+              {invoices.length > 0 && <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="confirm" value="1" required />Tôi hiểu sẽ mất lịch sử của phòng {room.code}</label>}
+              <button className={btnDangerCls}>Xóa phòng {room.code}</button>
+            </form>
+          </section>
 
           {past.length > 0 && (
             <section className={cardCls}>

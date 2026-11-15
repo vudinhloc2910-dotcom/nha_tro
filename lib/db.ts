@@ -139,6 +139,11 @@ async function init() {
   if (!cols.rows.some((r) => r.name === "locked")) {
     await c.execute("ALTER TABLE invoices ADD COLUMN locked INTEGER NOT NULL DEFAULT 0");
   }
+  // Phòng: tầng/khu tự đặt (VD "Tầng trệt", "Mặt bằng kinh doanh") và loại phòng
+  const rcols2 = await c.execute("SELECT name FROM pragma_table_info('rooms')");
+  for (const col of ["floor_label", "kind"]) {
+    if (!rcols2.rows.some((r) => r.name === col)) await c.execute(`ALTER TABLE rooms ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+  }
   // Sổ thu chi: cột meta lưu thêm chi tiết (số lượng, đơn giá, phòng mới...)
   const lcols = await c.execute("SELECT name FROM pragma_table_info('ledger')");
   if (!lcols.rows.some((r) => r.name === "meta")) await c.execute("ALTER TABLE ledger ADD COLUMN meta TEXT NOT NULL DEFAULT ''");
