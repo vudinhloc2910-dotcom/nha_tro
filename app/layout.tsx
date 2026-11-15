@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ArrowNav } from "./arrow-nav";
 import { NoWheel } from "./no-wheel";
 
 export const metadata: Metadata = {
@@ -11,7 +12,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body className="min-h-screen bg-cream text-gray-900 antialiased"><NoWheel />{children}</body>
+      <body className="min-h-screen bg-cream text-gray-900 antialiased"><NoWheel /><ArrowNav />{children}</body>
     </html>
   );
 }

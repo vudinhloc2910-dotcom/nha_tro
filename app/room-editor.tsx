@@ -43,7 +43,7 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
   }
   const L = "mb-1 block text-xs font-medium text-gray-600";
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:p-8" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div data-nav-scope className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:p-8" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">Sửa phòng {room.code}</h2>

@@ -105,11 +105,11 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
   /** Enter / mũi tên lên xuống: nhảy sang ô kế tiếp trong cùng cột phòng. */
   function onKey(e: React.KeyboardEvent<HTMLElement>, id: number) {
     const t = e.target as HTMLElement;
-    if (t.tagName !== "INPUT" || (e.key !== "Enter" && e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+    // Enter: xuống ô dưới của phòng này. Phím mũi tên do ArrowNav (toàn web) lo.
+    if (t.tagName !== "INPUT" || e.key !== "Enter") return;
     const list = Array.from(document.querySelectorAll<HTMLInputElement>(`input[data-room="${id}"]:not([disabled])`)).filter((i) => i.offsetParent !== null && !i.closest("details:not([open])"));
     const at = list.indexOf(t as HTMLInputElement);
-    const next = list[at + (e.key === "ArrowUp" ? -1 : 1)];
-    if (e.key !== "Enter") e.preventDefault(); // mũi tên chỉ để chuyển ô, không làm đổi số
+    const next = list[at + 1];
     if (next) { e.preventDefault(); next.focus(); next.select?.(); return; }
     // Hết ô của phòng này (thẻ điện thoại): lưu phòng này rồi nhảy sang ô "số mới" của phòng kế tiếp
     if (e.key === "Enter") {
@@ -295,7 +295,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
         })}
       </div>
 
-      <div className="hidden max-h-[calc(100vh-6rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
+      <div data-nav-scope className="hidden max-h-[calc(100vh-6rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
