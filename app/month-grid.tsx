@@ -295,7 +295,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
         })}
       </div>
 
-      <div data-nav-scope className="hidden max-h-[calc(100vh-6rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
+      <div data-nav-scope className="hidden max-h-[calc(100vh-8rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
