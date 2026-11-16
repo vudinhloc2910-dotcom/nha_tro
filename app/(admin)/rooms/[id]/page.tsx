@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
 import { all, readAll } from "@/lib/db";
 import { currentMonth, dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
@@ -93,9 +94,9 @@ export default async function RoomPage({
               <div><label className={labelCls}>Họ tên</label><input name="name" required defaultValue={t?.name ?? ""} className={inputCls} /></div>
               <div><label className={labelCls}>Số điện thoại</label><input name="phone" defaultValue={t?.phone ?? ""} className={inputCls} /></div>
               <div><label className={labelCls}>Số người ở</label><input name="people" type="number" min="1" defaultValue={t?.people ?? 1} className={inputCls} /></div>
-              <div><label className={labelCls}>Ngày vào</label><input name="move_in" type="date" defaultValue={t?.move_in ?? ""} className={inputCls} /></div>
+              <div><label className={labelCls}>Ngày vào</label><DateVN name="move_in" defaultValue={t?.move_in ?? ""} className={inputCls} /></div>
               <div><label className={labelCls}>Tiền cọc (đ)</label><input name="deposit" type="number" min="0" defaultValue={t?.deposit ?? 0} className={inputCls} /></div>
-              <div><label className={labelCls}>Hợp đồng đến ngày</label><input name="contract_end" type="date" defaultValue={t?.contract_end ?? ""} className={inputCls} /></div>
+              <div><label className={labelCls}>Hợp đồng đến ngày</label><DateVN name="contract_end" defaultValue={t?.contract_end ?? ""} className={inputCls} /></div>
               <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" name="residence_done" defaultChecked={!!t?.residence_done} />Đã khai tạm trú</label>
               <div className="flex items-end"><button className={btnCls}>{t ? "Lưu khách" : "Thêm khách"}</button></div>
             </form>

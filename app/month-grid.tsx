@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import { saveRoomMonth, saveRoomNote, saveRoomProfile, type RoomMonthInput, type SaveResult } from "./actions";
 import { StatusBadge } from "./components";
 import { CopyButton } from "./copy-button";
+import { DateVN } from "./date-input";
 import { RoomEditor } from "./room-editor";
 import { MonthExtras, type LiveThu } from "./month-extras";
 import type { LedgerMonth } from "@/lib/ledgermonth";
@@ -268,8 +269,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 <summary className="cursor-pointer py-1.5 text-sm font-medium text-brand-700">Chi tiết các khoản khác (tiền phòng, dịch vụ, phụ phí…)</summary>
                 <div className="mt-2 space-y-3 border-t border-gray-100 pt-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block text-xs text-gray-600">Kỳ từ<input type="date" data-room={r.id} value={f.periodStart} onChange={(e) => setF(r.id, { periodStart: e.target.value })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
-                    <label className="block text-xs text-gray-600">Kỳ đến<input type="date" data-room={r.id} value={f.periodEnd} onChange={(e) => setF(r.id, { periodEnd: e.target.value })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
+                    <label className="block text-xs text-gray-600">Kỳ từ<DateVN data-room={r.id} value={f.periodStart} onChange={(v) => setF(r.id, { periodStart: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
+                    <label className="block text-xs text-gray-600">Kỳ đến<DateVN data-room={r.id} value={f.periodEnd} onChange={(v) => setF(r.id, { periodEnd: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                     <label className="block text-xs text-gray-600">Số người<input type="number" min="1" inputMode="numeric" data-room={r.id} value={f.people} onChange={(e) => setF(r.id, { people: e.target.value })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                     <label className="block text-xs text-gray-600">Tiền phòng<input type="number" min="0" inputMode="numeric" data-room={r.id} value={f.rent} onChange={(e) => setF(r.id, { rent: e.target.value })} onBlur={() => commit(r.id)} className={`${inp} mt-1 text-right`} /></label>
                   </div>
@@ -349,8 +350,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
               {rooms.map((r) => (
                 <td key={r.id} className={cell}>
                   <div className="space-y-1">
-                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Từ<input type="date" data-room={r.id} value={forms[r.id].periodStart} onChange={(e) => setF(r.id, { periodStart: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
-                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Đến<input type="date" data-room={r.id} value={forms[r.id].periodEnd} onChange={(e) => setF(r.id, { periodEnd: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
+                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Từ<DateVN data-room={r.id} value={forms[r.id].periodStart} onChange={(v) => setF(r.id, { periodStart: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
+                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Đến<DateVN data-room={r.id} value={forms[r.id].periodEnd} onChange={(v) => setF(r.id, { periodEnd: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
                   </div>
                 </td>
               ))}

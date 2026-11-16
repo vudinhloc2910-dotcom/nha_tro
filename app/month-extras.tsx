@@ -88,8 +88,8 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
         <section onBlur={exp.flush} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-center text-base font-bold tracking-wide">CHI PHÍ PHÁT SINH (#)</h2>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[34rem] border-collapse">
-              <thead><tr><th className={`${th} w-8`} /><th className={th}>Tên hạng mục</th><th className={`${th} w-16`}>Số lượng</th><th className={`${th} w-28`}>Đơn giá</th><th className={`${th} w-28 text-right`}>Thành tiền</th><th className={`${th} w-44`}>Ghi chú</th><th className={`${th} w-8`} /></tr></thead>
+            <table className="w-full min-w-[32rem] border-collapse">
+              <thead><tr><th className={`${th} w-8`} /><th className={`${th} min-w-[14rem]`}>Tên hạng mục</th><th className={`${th} w-14`}>Số lượng</th><th className={`${th} w-28`}>Đơn giá</th><th className={`${th} w-28 text-right`}>Thành tiền</th><th className={`${th} w-24`}>Ghi chú</th><th className={`${th} w-8`} /></tr></thead>
               <tbody>
                 {items.map((it, i) => (
                   <tr key={i} className={pins.includes(it.name.trim()) && it.name.trim() ? "bg-amber-50" : ""}>

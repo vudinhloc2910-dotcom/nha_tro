@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
 import { all, one } from "@/lib/db";
 import { dateVN, payWindowText, monthLabel, statusOf, today, vnd } from "@/lib/format";
@@ -81,7 +82,7 @@ export default async function InvoicePage({
           <input type="hidden" name="invoice_id" value={inv.id} />
           <div><label className={labelCls}>Số tiền (đ)</label><input name="amount" type="number" min="1" defaultValue={remain || ""} required className={inputCls} /></div>
           <div><label className={labelCls}>Hình thức</label><select name="method" className={inputCls}><option value="bank">Chuyển khoản</option><option value="cash">Tiền mặt</option></select></div>
-          <div><label className={labelCls}>Ngày thu</label><input name="paid_at" type="date" defaultValue={today()} className={inputCls} /></div>
+          <div><label className={labelCls}>Ngày thu</label><DateVN name="paid_at" defaultValue={today()} className={inputCls} /></div>
           <div><label className={labelCls}>Ghi chú</label><input name="note" className={inputCls} /></div>
           <div className="flex items-end"><button className={btnCls}>Ghi nhận</button></div>
         </form>

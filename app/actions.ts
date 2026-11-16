@@ -432,6 +432,8 @@ export type RoomProfileInput = {
   code: string; tenantName: string; phone: string; people: string; rent: string; dueDay: string; note: string;
   elecPrice: string; waterPrice: string; elecStart: string; waterStart: string;
   svc: Record<string, { unit: string; off: boolean }>;
+  /** Dịch vụ mới thêm ngay trong ô Sửa (Wifi, Máy giặt + sấy...) */
+  newSvc?: { name: string; type: string; price: string; scope: string }[];
 };
 export async function saveRoomProfile(inp: RoomProfileInput): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdmin();
@@ -458,6 +460,17 @@ export async function saveRoomProfile(inp: RoomProfileInput): Promise<{ ok: true
       pref(`svc:${sid}`, n(v.unit));
       if (v.off) st.push({ sql: "INSERT INTO room_prefs(room_id,key,value) VALUES (?,?,'1') ON CONFLICT(room_id,key) DO UPDATE SET value='1'", args: [room.id, `svc_off:${sid}`] });
       else st.push({ sql: "DELETE FROM room_prefs WHERE room_id=? AND key=?", args: [room.id, `svc_off:${sid}`] });
+    }
+    // Dịch vụ mới (bỏ qua nếu đã có dịch vụ cùng tên trong cùng phạm vi)
+    for (const ns of (inp.newSvc ?? []).slice(0, 10)) {
+      const sname = String(ns.name ?? "").trim().slice(0, 60);
+      if (!sname) continue;
+      const price = Math.max(0, Math.round(n(ns.price) ?? 0));
+      const type = ns.type === "person" ? "person" : ns.type === "vehicle" ? "vehicle" : "room";
+      const scope = ns.scope === "house" ? null : room.id;
+      const dup = await one("SELECT id FROM services WHERE house_id=? AND name=? AND COALESCE(room_id,0)=?", room.house_id, sname, scope ?? 0);
+      if (dup) return { ok: false, error: `Dịch vụ "${sname}" đã có, hãy sửa giá ở danh sách phía trên` };
+      st.push({ sql: "INSERT INTO services(house_id, name, type, price, room_id) VALUES (?,?,?,?,?)", args: [room.house_id, sname, type, price, scope] });
     }
     await batch(st);
     // Tính lại hóa đơn tháng đang xem (nếu đã có) theo thông tin mới

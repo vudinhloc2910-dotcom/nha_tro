@@ -31,13 +31,14 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
   const [svc, setSvc] = useState<Record<number, { unit: string; off: boolean }>>(() =>
     Object.fromEntries(services.map((s) => [s.id, { unit: s2(room.prefs.svc[s.id]?.unit), off: !!room.prefs.svc[s.id]?.off }]))
   );
+  const [newSvc, setNewSvc] = useState<{ name: string; type: string; price: string; scope: string }[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
 
   async function save() {
     setBusy(true); setErr("");
-    const res = await saveRoomProfile({ roomId: room.id, month, ...f, svc: Object.fromEntries(Object.entries(svc).map(([k, v]) => [k, v])) });
+    const res = await saveRoomProfile({ roomId: room.id, month, ...f, svc: Object.fromEntries(Object.entries(svc).map(([k, v]) => [k, v])), newSvc });
     setBusy(false);
     if (res.ok) onSaved(); else setErr(res.error);
   }
@@ -73,9 +74,10 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
           <div><label className={L}>Giá nước ({room.input.waterMode === "person" ? "đ/người" : "đ/m³"})</label><input className={inp} type="number" min="0" value={f.waterPrice} placeholder={String(room.input.waterPrice)} onChange={(e) => set("waterPrice", e.target.value)} /></div>
         </div>
 
-        {services.filter((s) => !s.roomId || s.roomId === room.id).length > 0 && (
+        <h3 className="mb-1 mt-5 text-sm font-semibold">Giá dịch vụ của phòng</h3>
+        <p className="mb-2 text-xs text-gray-500">Wifi, máy giặt + sấy, vệ sinh/rác, gửi xe... Để trống giá = dùng giá chung của dịch vụ; tick &quot;Không thu&quot; nếu phòng này không dùng.</p>
+        {(
           <>
-            <h3 className="mb-1 mt-5 text-sm font-semibold">Dịch vụ của phòng</h3>
             <div className="space-y-2">
               {services.filter((s) => !s.roomId || s.roomId === room.id).map((s) => (
                 <div key={s.id} className="grid grid-cols-[1fr_8rem_auto] items-center gap-2">
@@ -87,6 +89,25 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
             </div>
           </>
         )}
+        {services.filter((s) => !s.roomId || s.roomId === room.id).length === 0 && newSvc.length === 0 && <p className="mb-2 text-xs italic text-gray-400">Chưa có dịch vụ nào. Bấm một gợi ý bên dưới hoặc &quot;+ Thêm dịch vụ&quot;.</p>}
+        <div className="mt-3 space-y-2">
+          {newSvc.map((n, i) => (
+            <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border border-dashed border-brand-300 bg-brand-50/40 p-2 sm:grid-cols-[1fr_7rem_7rem_9rem_auto]">
+              <input className={`${inp} col-span-2 sm:col-span-1`} list="room-svc-suggest" placeholder="Tên (VD: Wifi)" value={n.name} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+              <select className={inp} value={n.type} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}><option value="room">Theo phòng</option><option value="person">Theo người</option><option value="vehicle">Theo xe</option></select>
+              <input className={`${inp} text-right`} type="number" min="0" placeholder="Giá (đ)" value={n.price} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} />
+              <select className={inp} value={n.scope} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, scope: e.target.value } : x)))}><option value="room">Chỉ phòng này</option><option value="house">Cả nhà</option></select>
+              <button type="button" aria-label="Bỏ dòng" onClick={() => setNewSvc((p) => p.filter((_, j) => j !== i))} className="px-1 text-lg text-gray-400 hover:text-red-600">✕</button>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setNewSvc((p) => [...p, { name: "", type: "room", price: "", scope: "room" }])} className="text-sm font-medium text-brand-700 hover:underline">+ Thêm dịch vụ</button>
+            {["Wifi", "Máy giặt + sấy", "Vệ sinh, rác", "Gửi xe"].map((nm) => (
+              <button key={nm} type="button" onClick={() => setNewSvc((p) => [...p, { name: nm, type: nm === "Gửi xe" ? "vehicle" : nm === "Vệ sinh, rác" ? "person" : "room", price: "", scope: "room" }])} className="rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-xs text-gray-700 hover:bg-gray-50">+ {nm}</button>
+            ))}
+          </div>
+          <datalist id="room-svc-suggest"><option value="Wifi" /><option value="Máy giặt + sấy" /><option value="Vệ sinh, rác" /><option value="Gửi xe" /><option value="Sạc xe điện" /><option value="Điều hòa" /><option value="Thang máy" /></datalist>
+        </div>
 
         {err && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{err}</p>}
         <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
