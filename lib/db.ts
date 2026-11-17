@@ -89,6 +89,12 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL REFERENCES rooms(id),
     kind TEXT NOT NULL DEFAULT 'Xe máy', plate TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT ''
   );
+  CREATE TABLE IF NOT EXISTS room_files(
+    id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL, tenant_id INTEGER,
+    kind TEXT NOT NULL DEFAULT 'other', name TEXT NOT NULL DEFAULT '', mime TEXT NOT NULL DEFAULT '',
+    size INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL, created TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_room_files_room ON room_files(room_id);
   CREATE TABLE IF NOT EXISTS activity(
     id INTEGER PRIMARY KEY, house_id INTEGER NOT NULL, room_id INTEGER, kind TEXT NOT NULL,
     text TEXT NOT NULL, ts TEXT NOT NULL
@@ -152,7 +158,7 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
  * Phiên bản cấu trúc database. Khi thêm bảng/cột mới trong init() thì TĂNG số này, để lần chạy đầu tiên nâng cấp một lần.
  * Các lần sau chỉ tốn 1 truy vấn kiểm tra (thay vì ~25 truy vấn mỗi lần khởi động máy chủ).
  */
-const SCHEMA_VERSION = "15";
+const SCHEMA_VERSION = "16";
 
 async function init() {
   const c = await getClient();

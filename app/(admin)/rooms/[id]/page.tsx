@@ -8,12 +8,14 @@ import { addRoomExtra, addRoomService, addVehicle, checkoutTenant, deleteRoom, d
 import { computeInvoice, svcUnitLabel } from "@/lib/calc";
 import { Flash, StatusBadge } from "../../../components";
 import { RoomEditButton } from "../../../room-editor";
+import { RoomFiles, type RoomFile } from "../../../room-files";
 import { accent, btnCls, btnDangerCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
 
 type Room = { id: number; house_id: number; code: string; rent: number; due_day: number; note: string; floor_label: string; kind: string };
 type Tenant = { name: string; phone: string; people: number; move_in: string; deposit: number; contract_end: string | null; residence_done: number };
 type Vehicle = { id: number; kind: string; plate: string; note: string };
 type Inv = { id: number; month: string; total: number; due_date: string; locked: number; state: string; paid: number };
+type StayRow = { id: number; name: string; phone: string; people: number; move_in: string; move_out: string; deposit: number; active: number; files: number; bills: number; billed: number };
 type Rd = { month: string; elec_old: number; elec_new: number; water_old: number; water_new: number };
 
 const TABS = [["info", "Thông tin chung"], ["price", "Giá và phí"], ["history", "Lịch sử"]] as const;
@@ -27,13 +29,20 @@ export default async function RoomPage({
   const rid = Number(id);
   const month = currentMonth();
   // Một lượt gọi database cho mọi dữ liệu của phòng
-  const [roomR, tenantR, pastR, invR, vehR] = await readAll([
+  const [roomR, tenantR, pastR, invR, vehR, fileR, allTenR] = await readAll([
     { sql: "SELECT * FROM rooms WHERE id=?", args: [rid] },
     { sql: "SELECT * FROM tenants WHERE room_id=? AND active=1", args: [rid] },
     { sql: "SELECT name, move_in, move_out FROM tenants WHERE room_id=? AND active=0 ORDER BY id DESC", args: [rid] },
     { sql: `SELECT i.id, i.month, i.total, i.due_date, i.locked, i.state, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i WHERE i.room_id=? ORDER BY i.month DESC`, args: [rid] },
     { sql: "SELECT id, kind, plate, note FROM vehicles WHERE room_id=? ORDER BY id", args: [rid] },
+    { sql: `SELECT f.id, f.kind, f.name, f.mime, f.size, f.created, f.tenant_id, t.name tname FROM room_files f
+            LEFT JOIN tenants t ON t.id=f.tenant_id WHERE f.room_id=? ORDER BY f.id DESC`, args: [rid] },
+    { sql: `SELECT t.id, t.name, t.phone, t.people, t.move_in, t.move_out, t.deposit, t.active,
+              (SELECT COUNT(*) FROM room_files f WHERE f.tenant_id=t.id) files,
+              (SELECT COUNT(*) FROM invoices i WHERE i.room_id=t.room_id AND i.tenant_name=t.name) bills,
+              (SELECT COALESCE(SUM(i.total),0) FROM invoices i WHERE i.room_id=t.room_id AND i.tenant_name=t.name) billed
+            FROM tenants t WHERE t.room_id=? ORDER BY t.active DESC, t.id DESC`, args: [rid] },
   ]);
   const room = roomR[0] as Room | undefined;
   if (!room) notFound();
@@ -41,6 +50,8 @@ export default async function RoomPage({
   const past = pastR as { name: string; move_in: string; move_out: string }[];
   const invoices = invR as Inv[];
   const vehicles = vehR as Vehicle[];
+  const files = fileR as RoomFile[];
+  const stays = allTenR as StayRow[];
   const debt = invoices.reduce((a, i) => a + Math.max(0, i.total - i.paid), 0);
   const md = await loadMonth(room.house_id, month);
   const view = md.rooms.find((r) => r.id === room.id);
@@ -132,6 +143,12 @@ export default async function RoomPage({
             </section>
           )}
 
+          <section className={cardCls}>
+            <h2 className="mb-1 font-semibold">Giấy tờ: ảnh CCCD, hợp đồng</h2>
+            <p className="mb-3 text-xs text-gray-500">Chụp hoặc chọn ảnh CCCD (mặt trước, mặt sau), ảnh/PDF hợp đồng của khách đang ở phòng này. Chỉ chủ trọ đăng nhập mới xem được.</p>
+            <RoomFiles roomId={room.id} files={files} />
+          </section>
+
           <section className="rounded-2xl border border-red-200 bg-red-50/40 p-4">
             <h2 className="mb-1 font-semibold text-red-800">Xóa phòng này</h2>
             <p className="mb-3 text-xs text-gray-600">{invoices.length > 0 ? `Phòng đã có ${invoices.length} hóa đơn. Xóa sẽ mất cả khách, hóa đơn, chỉ số điện nước và lịch sử thu tiền của phòng, không khôi phục được.` : "Phòng chưa có hóa đơn nào, xóa không mất dữ liệu thu tiền."}</p>
@@ -217,9 +234,20 @@ export default async function RoomPage({
         </>
       )}
 
-      {tab === "history" && <History roomId={room.id} invoices={invoices} />}
+      {tab === "history" && <History roomId={room.id} invoices={invoices} stays={stays} />}
     </div>
   );
+}
+
+/** "8 tháng", "1 năm 2 tháng"... từ ngày vào đến ngày ra (hoặc hôm nay). */
+function stayLabel(from: string, to: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return "-";
+  const a = Date.parse(from), b = /^\d{4}-\d{2}-\d{2}$/.test(to) ? Date.parse(to) : Date.now();
+  const days = Math.max(0, Math.round((b - a) / 86400000));
+  const months = Math.floor(days / 30.4);
+  if (months < 1) return `${days} ngày`;
+  const y = Math.floor(months / 12), m = months % 12;
+  return y ? `${y} năm${m ? ` ${m} tháng` : ""}` : `${months} tháng`;
 }
 
 function Tag({ own }: { own?: boolean }) {
@@ -228,12 +256,34 @@ function Tag({ own }: { own?: boolean }) {
     : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">Giá chung của nhà</span>;
 }
 
-async function History({ roomId, invoices }: { roomId: number; invoices: Inv[] }) {
+async function History({ roomId, invoices, stays }: { roomId: number; invoices: Inv[]; stays: StayRow[] }) {
   const readings = await all<Rd>("SELECT month, elec_old, elec_new, water_old, water_new FROM readings WHERE room_id=? ORDER BY month DESC LIMIT 12", roomId);
   const chart = [...readings].reverse().map((r) => ({ m: r.month, e: Math.max(0, r.elec_new - r.elec_old) }));
   const max = Math.max(1, ...chart.map((c) => c.e));
   return (
     <>
+      <section className={`${cardCls} overflow-x-auto`}>
+        <h2 className="mb-3 font-semibold">Lịch sử khách thuê phòng này</h2>
+        {stays.length === 0 ? <p className="text-sm text-gray-500">Phòng chưa có khách nào.</p> : (
+          <table className="w-full min-w-[34rem]">
+            <thead><tr><th className={thCls}>Khách</th><th className={thCls}>Ở từ</th><th className={thCls}>Đến</th><th className={thCls}>Thời gian</th><th className={`${thCls} text-right`}>Cọc</th><th className={`${thCls} text-right`}>Hóa đơn</th><th className={thCls}>Giấy tờ</th></tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {stays.map((s) => (
+                <tr key={s.id}>
+                  <td className={tdCls}>{s.name}{s.active ? <span className="ml-2 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800">Đang ở</span> : null}<div className="text-xs text-gray-500">{s.people} người{s.phone ? ` · ${s.phone}` : ""}</div></td>
+                  <td className={tdCls}>{s.move_in ? dateVN(s.move_in) : "?"}</td>
+                  <td className={tdCls}>{s.active ? "—" : s.move_out ? dateVN(s.move_out) : "?"}</td>
+                  <td className={tdCls}>{stayLabel(s.move_in, s.active ? "" : s.move_out)}</td>
+                  <td className={`${tdCls} text-right`}>{vnd(s.deposit ?? 0)}</td>
+                  <td className={`${tdCls} text-right`}>{s.bills ? `${s.bills} kỳ · ${vnd(s.billed)}` : "-"}</td>
+                  <td className={tdCls}>{s.files ? <Link className="text-brand-700 hover:underline" href={`/rooms/${roomId}?tab=info`}>{s.files} file</Link> : <span className="text-gray-400">-</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
       <section className={cardCls}>
         <h2 className="mb-3 font-semibold">Điện dùng 12 tháng gần nhất (kWh)</h2>
         {chart.length === 0 ? <p className="text-sm text-gray-500">Chưa có chỉ số điện nước.</p> : (

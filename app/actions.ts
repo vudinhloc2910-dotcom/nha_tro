@@ -812,6 +812,7 @@ export async function deleteRoom(f: FormData) {
     { sql: "DELETE FROM room_month WHERE room_id=?", args: [id] },
     { sql: "DELETE FROM room_prefs WHERE room_id=?", args: [id] },
     { sql: "DELETE FROM vehicles WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM room_files WHERE room_id=?", args: [id] },
     { sql: "DELETE FROM tenants WHERE room_id=?", args: [id] },
     { sql: "UPDATE issues SET room_id=NULL WHERE room_id=?", args: [id] },
     { sql: "UPDATE activity SET room_id=NULL WHERE room_id=?", args: [id] },
@@ -912,4 +913,39 @@ export async function setInvoiceStatus(invoiceId: number, target: "paid" | "unpa
   } else return { ok: false, error: "Trạng thái không hợp lệ" };
   refresh();
   return { ok: true, status: target };
+}
+
+/* ---------- Giấy tờ của phòng: ảnh CCCD, hợp đồng ---------- */
+const FILE_KINDS = ["cccd", "contract", "other"];
+const FILE_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const MAX_FILE_BYTES = 3 * 1024 * 1024;
+const MAX_FILES_PER_ROOM = 40;
+
+/** Lưu một ảnh/PDF (đã nén ở trình duyệt, gửi dạng base64) vào hồ sơ phòng, gắn với khách đang ở. */
+export async function uploadRoomFile(inp: { roomId: number; kind: string; name: string; mime: string; data: string }): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const h = await currentHouse();
+  const room = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", Number(inp.roomId), h.id);
+  if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+  const kind = FILE_KINDS.includes(inp.kind) ? inp.kind : "other";
+  if (!FILE_MIME.includes(inp.mime)) return { ok: false, error: "Chỉ nhận ảnh (JPG, PNG, WebP) hoặc file PDF" };
+  const data = String(inp.data ?? "");
+  if (!/^[A-Za-z0-9+/=]+$/.test(data) || data.length < 20) return { ok: false, error: "File không hợp lệ" };
+  const size = Math.floor((data.length * 3) / 4);
+  if (size > MAX_FILE_BYTES) return { ok: false, error: `File quá lớn (tối đa ${MAX_FILE_BYTES / 1024 / 1024}MB)` };
+  const cnt = Number((await one<{ c: number }>("SELECT COUNT(*) c FROM room_files WHERE room_id=?", room.id))?.c ?? 0);
+  if (cnt >= MAX_FILES_PER_ROOM) return { ok: false, error: `Mỗi phòng tối đa ${MAX_FILES_PER_ROOM} file, hãy xóa bớt file cũ` };
+  const tenant = await one<{ id: number }>("SELECT id FROM tenants WHERE room_id=? AND active=1", room.id);
+  const name = String(inp.name ?? "").replace(/[\r\n]/g, " ").slice(0, 120) || "file";
+  await run("INSERT INTO room_files(room_id, tenant_id, kind, name, mime, size, data, created) VALUES (?,?,?,?,?,?,?,?)", room.id, tenant?.id ?? null, kind, name, inp.mime, size, data, new Date().toISOString());
+  refresh();
+  return { ok: true };
+}
+
+export async function deleteRoomFile(id: number): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const h = await currentHouse();
+  await run("DELETE FROM room_files WHERE id=? AND room_id IN (SELECT id FROM rooms WHERE house_id=?)", Number(id), h.id);
+  refresh();
+  return { ok: true };
 }
