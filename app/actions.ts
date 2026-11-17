@@ -954,22 +954,34 @@ export async function deleteRoomFile(id: number): Promise<{ ok: boolean; error?:
   return { ok: true };
 }
 
-/** Bật/tắt bảng thanh toán với chủ nhà của nhà đang chọn, chọn phòng chủ nhà đang ở và có trừ chi phí phòng đó hay không. */
-export async function saveLandlordSettings(inp: { enabled: boolean; roomId: number | null; deduct: boolean }): Promise<{ ok: boolean; error?: string }> {
+/** Bảng thanh toán với chủ nhà: bật/tắt, phòng lấy tiền điện, phòng lấy tiền nước (chọn từ các phòng trong nhà). */
+export async function saveLandlordSettings(inp: { enabled: boolean; elecRoomId: number | null; waterRoomId: number | null }): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const h = await currentHouse();
-  let roomId = 0;
-  if (inp.roomId) {
-    const r = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", Number(inp.roomId), h.id);
-    if (!r) return { ok: false, error: "Không tìm thấy phòng" };
-    roomId = r.id;
-  }
+  const own = async (id: number | null) => {
+    if (!id) return 0;
+    const r = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", Number(id), h.id);
+    return r ? r.id : -1;
+  };
+  const e = await own(inp.elecRoomId), w = await own(inp.waterRoomId);
+  if (e < 0 || w < 0) return { ok: false, error: "Không tìm thấy phòng" };
   const up = "INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value";
   await batch([
     { sql: up, args: [h.id, "landlord_table", inp.enabled ? "1" : "0"] },
-    { sql: up, args: [h.id, "landlord_room", String(roomId)] },
-    { sql: up, args: [h.id, "landlord_deduct", inp.deduct ? "1" : "0"] },
+    { sql: up, args: [h.id, "landlord_elec_room", String(e)] },
+    { sql: up, args: [h.id, "landlord_water_room", String(w)] },
   ]);
   refresh();
+  return { ok: true };
+}
+
+/** Chi phí phát sinh (nội dung - số tiền) tự điền của tháng trong bảng thanh toán với chủ nhà. */
+export async function saveLandlordExtras(month: string, rows: { name: string; amount: string }[]): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const clean = (rows ?? []).slice(0, 30).map((r) => ({ name: String(r.name ?? "").trim().slice(0, 120), amount: String(r.amount ?? "").replace(/[^\d-]/g, "") }))
+    .filter((r) => r.name || (r.amount && r.amount !== "-"));
+  await run("INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value", h.id, `landlord_extra:${month}`, JSON.stringify(clean));
   return { ok: true };
 }

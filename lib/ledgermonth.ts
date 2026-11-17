@@ -11,9 +11,16 @@ export type LedgerMonth = {
   /** Tên các khoản đã ghim (tự có ở các tháng sau) */
   pins: string[];
   /** Bảng thanh toán thực tế với chủ nhà (nhà ở chung với chủ): bật/tắt, phòng chủ nhà ở, có trừ chi phí phòng đó không */
-  landlord: { enabled: boolean; roomId: number | null; deduct: boolean };
+  landlord: { enabled: boolean; elecRoomId: number | null; waterRoomId: number | null; extras: { name: string; amount: string }[] };
 };
 
+/** Các dòng chi phí phát sinh tự điền trong bảng thanh toán với chủ nhà (lưu theo tháng). */
+function parseExtras(v: string | undefined): { name: string; amount: string }[] {
+  try {
+    const a = JSON.parse(v ?? "[]");
+    return Array.isArray(a) ? a.map((x) => ({ name: String(x?.name ?? ""), amount: String(x?.amount ?? "") })) : [];
+  } catch { return []; }
+}
 const parse = <T,>(s: string): Partial<T> => { try { return JSON.parse(s) as Partial<T>; } catch { return {}; } };
 
 /** Sổ thu chi của một nhà trong một tháng: chi phí phát sinh, thu phòng mới, chi theo từng khoản. */
@@ -63,6 +70,6 @@ export async function loadLedgerMonth(houseId: number, month: string): Promise<L
     chi: { dien: sum("dien"), nuoc: sum("nuoc"), mang: sum("mang"), dich_vu: sum("dich_vu"), tien_phong: sum("tien_phong") },
     rentMonthly: Number(s.rent_cost_monthly) || 0, salaryMonthly: Number(s.manager_salary) || 0, partners: parsePartners(s.partners),
     pins: (pn as { name: string }[]).map((x) => x.name),
-    landlord: { enabled: s.landlord_table === "1", roomId: Number(s.landlord_room) || null, deduct: s.landlord_deduct !== "0" },
+    landlord: { enabled: s.landlord_table === "1", elecRoomId: Number(s.landlord_elec_room) || null, waterRoomId: Number(s.landlord_water_room) || null, extras: parseExtras(s[`landlord_extra:${month}`]) },
   };
 }
