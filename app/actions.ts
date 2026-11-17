@@ -8,6 +8,7 @@ import { setSelectedMonth } from "@/lib/month";
 import { all, batch, one, run } from "@/lib/db";
 import { currentHouse, setCurrentHouse } from "@/lib/house";
 import { generateInvoice, generateMonth, saveInvoice } from "@/lib/billing";
+import { addMonths } from "@/lib/calc";
 import { loadMonth } from "@/lib/monthdata";
 import { logActivity } from "@/lib/activity";
 import { parseImport, runImport } from "@/lib/import-sheet";
@@ -373,12 +374,12 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
     setMonth("debt", debt === null ? null : String(Math.max(0, Math.round(debt))), String(base.auto.debt));
     const discount = toNum(inp.discount);
     setMonth("discount", discount === null || discount === 0 ? null : String(Math.abs(Math.round(discount))), null);
-    setMonth("p_start", inp.periodStart || null, base.auto.periodStart);
+    if (inp.periodStart) setMonth("p_start", inp.periodStart, base.auto.periodStart); // ngày trống: giữ nguyên kỳ thu đã lưu
     // Ngày đóng tiền của phòng = ngày bắt đầu kỳ thu: sửa kỳ thu của tháng mới nhất thì các tháng sau tự theo ngày đó
     if (inp.periodStart && DATE_RE.test(inp.periodStart) && inp.periodStart !== base.auto.periodStart) {
       st.push({ sql: "UPDATE rooms SET due_day=? WHERE id=? AND COALESCE((SELECT MAX(month) FROM invoices WHERE room_id=?), '') <= ?", args: [Number(inp.periodStart.slice(8, 10)), R, R, M] });
     }
-    setMonth("p_end", inp.periodEnd || null, base.auto.periodEnd);
+    if (inp.periodEnd) setMonth("p_end", inp.periodEnd, base.auto.periodEnd);
     for (const [sid, v] of Object.entries(inp.svc ?? {})) {
       if (!/^\d+$/.test(sid)) continue;
       const n = toNum(v);
@@ -984,4 +985,29 @@ export async function saveLandlordExtras(month: string, rows: { name: string; am
     .filter((r) => r.name || (r.amount && r.amount !== "-"));
   await run("INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value", h.id, `landlord_extra:${month}`, JSON.stringify(clean));
   return { ok: true };
+}
+
+/**
+ * Đặt kỳ thu của MỌI phòng trong tháng theo "ngày đóng tiền" của từng phòng (ô Sửa phòng):
+ * Từ = ngày đó của tháng, Đến = đúng 1 tháng sau. Hóa đơn nhập từ sheet (đã khóa) chỉ đổi ngày, giữ nguyên số tiền.
+ */
+export async function applyDueDayToMonth(month: string): Promise<{ ok: boolean; error?: string; n?: number }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const rooms = await all<{ id: number; due_day: number }>("SELECT id, due_day FROM rooms WHERE house_id=?", h.id);
+  const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const st: { sql: string; args: (string | number)[] }[] = [];
+  const up = "INSERT INTO room_month(room_id,month,key,value) VALUES (?,?,?,?) ON CONFLICT(room_id,month,key) DO UPDATE SET value=excluded.value";
+  for (const r of rooms) {
+    const day = Math.min(Math.max(Math.round(r.due_day) || 15, 1), lastDay);
+    const start = `${month}-${String(day).padStart(2, "0")}`;
+    const end = addMonths(start, 1);
+    st.push({ sql: up, args: [r.id, month, "p_start", start] }, { sql: up, args: [r.id, month, "p_end", end] });
+    st.push({ sql: "UPDATE invoices SET period_start=?, due_date=? WHERE room_id=? AND month=?", args: [start, end, r.id, month] });
+  }
+  for (let i = 0; i < st.length; i += 400) await batch(st.slice(i, i + 400));
+  await generateMonth(h.id, month); // tính lại các hóa đơn chưa khóa để dòng "Kỳ ..." khớp ngày mới
+  refresh();
+  return { ok: true, n: rooms.length };
 }

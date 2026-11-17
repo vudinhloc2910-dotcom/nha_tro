@@ -196,7 +196,8 @@ export async function runImport(data: ImportData, opts: { houseId: number; house
       if (oldId) {
         stmts.push({ sql: "DELETE FROM payments WHERE invoice_id=?", args: [oldId] });
         stmts.push({ sql: "DELETE FROM invoice_lines WHERE invoice_id=?", args: [oldId] });
-        stmts.push({ sql: "UPDATE invoices SET tenant_name=?, people=?, prev_debt=0, total=?, due_date=?, locked=1 WHERE id=?", args: [tenantName, people, d.total, due, oldId] });
+        // Hóa đơn đã có ngày bắt đầu kỳ thu (chủ trọ đã sửa tay) thì giữ nguyên kỳ thu và hạn đóng, không đặt lại về ngày 15
+        stmts.push({ sql: "UPDATE invoices SET tenant_name=?, people=?, prev_debt=0, total=?, due_date=CASE WHEN period_start IS NOT NULL AND period_start<>'' THEN due_date ELSE ? END, locked=1 WHERE id=?", args: [tenantName, people, d.total, due, oldId] });
       } else {
         stmts.push({
           sql: "INSERT INTO invoices(room_id,month,tenant_name,people,prev_debt,total,due_date,token,locked) VALUES (?,?,?,?,0,?,?,?,1)",

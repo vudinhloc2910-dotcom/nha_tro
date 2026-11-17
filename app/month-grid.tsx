@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { saveRoomMonth, saveRoomNote, saveRoomProfile, type RoomMonthInput, type SaveResult } from "./actions";
+import { applyDueDayToMonth, saveRoomMonth, saveRoomNote, saveRoomProfile, type RoomMonthInput, type SaveResult } from "./actions";
 import { StatusBadge } from "./components";
 import { CopyButton } from "./copy-button";
 import { DateVN } from "./date-input";
@@ -106,7 +106,11 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
     if (busy.current[id]) return;
     const f = latest.current[id];
     const snap = JSON.stringify(f);
-    if (snap === saved.current[id]) return;
+    if (snap === saved.current[id]) {
+      // Đã sửa lại đúng như bản đã lưu: xóa báo lỗi cũ
+      setStatus((p) => (p[id]?.state === "error" ? { ...p, [id]: { state: "saved", msg: "Đã lưu ✓" } } : p));
+      return;
+    }
     busy.current[id] = true;
     setSt(id, { state: "saving", msg: "Đang lưu…" });
     const payload: RoomMonthInput = {
@@ -125,6 +129,17 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
     } else {
       setSt(id, { state: "error", msg: res.error });
     }
+  }
+
+  // Phòng nào lưu lỗi thì báo nổi bật ngay đầu bảng (dòng báo nhỏ ở cuối cột rất dễ bị bỏ sót)
+  const errList = rooms.filter((r) => status[r.id]?.state === "error").map((r) => ({ code: r.code, msg: status[r.id]!.msg }));
+  const [applying, setApplying] = useState(false);
+  async function applyDueDays() {
+    if (!window.confirm(`Đặt kỳ thu tháng ${mm} của TẤT CẢ phòng theo "ngày đóng tiền" ghi ở ô Sửa của từng phòng?\nKỳ thu anh đã sửa tay trong tháng này sẽ bị thay bằng ngày đó.`)) return;
+    setApplying(true);
+    const r = await applyDueDayToMonth(month);
+    setApplying(false);
+    if (r.ok) router.refresh(); else window.alert(r.error ?? "Không áp dụng được");
   }
 
   /** Enter / mũi tên lên xuống: nhảy sang ô kế tiếp trong cùng cột phòng. */
@@ -211,6 +226,16 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
           <div key={l} className={`rounded-2xl border border-stone-200 bg-white p-3 shadow-sm ${["border-t-4 border-t-sky-400", "border-t-4 border-t-teal-400", "border-t-4 border-t-rose-400"][i]}`}><div className="text-xs text-gray-500">{l}</div><div className={`mt-1 whitespace-nowrap text-[15px] font-bold sm:text-lg ${c}`}>{v}</div></div>
         ))}
       </div>
+      {errList.length > 0 && (
+        <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <b>Chưa lưu được {errList.length} phòng</b>, dữ liệu vừa sửa chưa được ghi:
+          <ul className="mt-1 list-disc pl-5">{errList.map((e) => <li key={e.code}>Phòng {e.code}: {e.msg}</li>)}</ul>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <button type="button" disabled={applying} onClick={() => void applyDueDays()} className="rounded-lg border border-brand-300 bg-white px-3 py-1.5 font-medium text-brand-800 shadow-sm hover:bg-brand-50 disabled:opacity-60">{applying ? "Đang áp dụng…" : "Đặt kỳ thu cả tháng theo ngày đóng tiền của từng phòng"}</button>
+        <span className="text-gray-500">Dùng khi nhiều phòng bị lệch ngày (VD cùng nhảy về 15). Ngày đóng tiền sửa ở nút Sửa của từng phòng.</span>
+      </div>
       <p className="text-xs text-gray-600">
         <span className="hidden md:inline">Gõ vào ô rồi bấm <b>Enter</b> (xuống ô dưới) hoặc <b>Tab</b> (sang ô kế). <b>Tự lưu</b> khi rời ô, tiền tự tính ngay. Ô chữ mờ là số tự động, gõ số khác để đặt riêng cho phòng đó.</span>
         <span className="md:hidden"><b>Tự lưu</b> khi rời ô. Chọn Điện/Nước rồi gõ số mới của từng phòng, tiền tự tính ngay.</span>
@@ -283,8 +308,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 <summary className="cursor-pointer py-1.5 text-sm font-medium text-brand-700">Chi tiết các khoản khác (tiền phòng, dịch vụ, phụ phí…)</summary>
                 <div className="mt-2 space-y-3 border-t border-gray-100 pt-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block text-xs text-gray-600">Kỳ từ<DateVN data-room={r.id} value={f.periodStart} onChange={(v) => setF(r.id, { periodStart: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
-                    <label className="block text-xs text-gray-600">Kỳ đến<DateVN data-room={r.id} value={f.periodEnd} onChange={(v) => setF(r.id, { periodEnd: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
+                    <label className="block text-xs text-gray-600">Kỳ từ<DateVN keepOnEmpty data-room={r.id} value={f.periodStart} onChange={(v) => setF(r.id, { periodStart: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
+                    <label className="block text-xs text-gray-600">Kỳ đến<DateVN keepOnEmpty data-room={r.id} value={f.periodEnd} onChange={(v) => setF(r.id, { periodEnd: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                     <label className="block text-xs text-gray-600">Số người<input type="number" min="1" inputMode="numeric" data-room={r.id} value={f.people} onChange={(e) => setF(r.id, { people: e.target.value })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                     <label className="block text-xs text-gray-600">Tiền phòng<MoneyField data-room={r.id} value={f.rent} onChange={(v) => setF(r.id, { rent: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                   </div>
@@ -364,8 +389,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
               {rooms.map((r) => (
                 <td key={r.id} className={cell}>
                   <div className="space-y-1">
-                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Từ<DateVN data-room={r.id} value={forms[r.id].periodStart} onChange={(v) => setF(r.id, { periodStart: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
-                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Đến<DateVN data-room={r.id} value={forms[r.id].periodEnd} onChange={(v) => setF(r.id, { periodEnd: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
+                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Từ<DateVN keepOnEmpty data-room={r.id} value={forms[r.id].periodStart} onChange={(v) => setF(r.id, { periodStart: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
+                    <label className="flex items-center gap-1 text-[10px] text-gray-500">Đến<DateVN keepOnEmpty data-room={r.id} value={forms[r.id].periodEnd} onChange={(v) => setF(r.id, { periodEnd: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} text-[11px]`} /></label>
                   </div>
                 </td>
               ))}

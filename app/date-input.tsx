@@ -24,10 +24,12 @@ type Props = Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "defaul
   /** Giá trị ban đầu (dùng trong form có `name`) */
   defaultValue?: string;
   onChange?: (iso: string) => void;
+  /** Bắt buộc có ngày: xóa trắng rồi rời ô thì quay về ngày cũ, không báo ô trống lên trên */
+  keepOnEmpty?: boolean;
 };
 
 /** Ô nhập ngày theo kiểu Việt Nam: ngày/tháng/năm (không phụ thuộc ngôn ngữ của trình duyệt). */
-export function DateVN({ value, defaultValue, onChange, onBlur, name, ...rest }: Props) {
+export function DateVN({ value, defaultValue, onChange, onBlur, name, keepOnEmpty, ...rest }: Props) {
   const [inner, setInner] = useState(defaultValue ?? "");
   const iso = value ?? inner;
   const [text, setText] = useState(toVN(iso));
@@ -44,11 +46,11 @@ export function DateVN({ value, defaultValue, onChange, onBlur, name, ...rest }:
         onChange={(e) => {
           const t = mask(e.target.value);
           setText(t);
-          if (t === "") { setInner(""); setSeen(""); onChange?.(""); return; }
+          if (t === "") { if (keepOnEmpty) return; setInner(""); setSeen(""); onChange?.(""); return; }
           const v = toISO(t);
           if (v) { setInner(v); setSeen(v); onChange?.(v); }
         }}
-        onBlur={(e) => { if (text !== "" && toISO(text) === null) setText(toVN(iso)); onBlur?.(e); }}
+        onBlur={(e) => { if ((text !== "" || keepOnEmpty) && toISO(text) === null) setText(toVN(iso)); onBlur?.(e); }}
       />
       {name && <input type="hidden" name={name} value={toISO(text) ?? ""} />}
     </>
