@@ -1,3 +1,4 @@
+import { MoneyField } from "../../../money-field";
 import Link from "next/link";
 import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
@@ -89,8 +90,8 @@ export default async function RoomPage({
               <div className="sm:col-span-2"><label className={labelCls}>Tên / số phòng</label><input name="code" required defaultValue={room.code} className={inputCls} placeholder="VD: 201, Mặt bằng 1, Tầng lửng" /></div>
               <div><label className={labelCls}>Tầng / khu</label><input name="floor_label" defaultValue={room.floor_label ?? ""} list="floor-suggest" className={inputCls} placeholder="Để trống = tự theo số phòng" /></div>
               <div><label className={labelCls}>Loại</label><input name="kind" defaultValue={room.kind ?? ""} list="kind-suggest" className={inputCls} placeholder="VD: Phòng trọ" /></div>
-              <div><label className={labelCls}>Giá thuê (đ)</label><input name="rent" type="number" min="0" defaultValue={room.rent} className={inputCls} /></div>
-              <div><label className={labelCls}>Hạn đóng (ngày trong tháng)</label><input name="due_day" type="number" min="1" max="31" defaultValue={room.due_day} className={inputCls} /></div>
+              <div><label className={labelCls}>Giá thuê (đ)</label><MoneyField name="rent" defaultValue={room.rent} className={inputCls} /></div>
+              <div><label className={labelCls}>Ngày đóng tiền = ngày bắt đầu kỳ thu</label><input name="due_day" type="number" min="1" max="31" defaultValue={room.due_day} className={inputCls} /></div>
               <div className="sm:col-span-2"><label className={labelCls}>Ghi chú</label><input name="note" defaultValue={room.note ?? ""} className={inputCls} /></div>
               <div><button className={btnCls}>Lưu phòng</button></div>
             </form>
@@ -106,7 +107,7 @@ export default async function RoomPage({
               <div><label className={labelCls}>Số điện thoại</label><input name="phone" defaultValue={t?.phone ?? ""} className={inputCls} /></div>
               <div><label className={labelCls}>Số người ở</label><input name="people" type="number" min="1" defaultValue={t?.people ?? 1} className={inputCls} /></div>
               <div><label className={labelCls}>Ngày vào</label><DateVN name="move_in" defaultValue={t?.move_in ?? ""} className={inputCls} /></div>
-              <div><label className={labelCls}>Tiền cọc (đ)</label><input name="deposit" type="number" min="0" defaultValue={t?.deposit ?? 0} className={inputCls} /></div>
+              <div><label className={labelCls}>Tiền cọc (đ)</label><MoneyField name="deposit" defaultValue={t?.deposit ?? 0} className={inputCls} /></div>
               <div><label className={labelCls}>Hợp đồng đến ngày</label><DateVN name="contract_end" defaultValue={t?.contract_end ?? ""} className={inputCls} /></div>
               <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" name="residence_done" defaultChecked={!!t?.residence_done} />Đã khai tạm trú</label>
               <div className="flex items-end"><button className={btnCls}>{t ? "Lưu khách" : "Thêm khách"}</button></div>
@@ -225,7 +226,7 @@ export default async function RoomPage({
               <input type="hidden" name="room_id" value={room.id} />
               <div className="sm:col-span-2"><label className={labelCls}>Tên khoản phí</label><input name="name" required list="svc-suggest" className={inputCls} placeholder="VD: Gửi xe" /></div>
               <div><label className={labelCls}>Cách tính</label><select name="type" className={inputCls}><option value="room">Theo phòng</option><option value="person">Theo người</option><option value="vehicle">Theo xe</option></select></div>
-              <div><label className={labelCls}>Đơn giá (đ)</label><input name="price" type="number" min="0" required className={inputCls} /></div>
+              <div><label className={labelCls}>Đơn giá (đ)</label><MoneyField name="price" required className={inputCls} /></div>
               <div><label className={labelCls}>Áp dụng cho</label><select name="scope" className={inputCls}><option value="room">Chỉ phòng này</option><option value="house">Tất cả phòng trong nhà</option></select></div>
               <div className="flex items-end"><button className={btnCls}>Thêm khoản</button></div>
             </form>
@@ -347,7 +348,7 @@ async function History({ roomId, invoices, stays }: { roomId: number; invoices: 
             <div><label className={labelCls}>Hóa đơn tháng</label>
               <select name="month" className={inputCls} defaultValue={invoices[0].month}>{invoices.map((i) => <option key={i.id} value={i.month}>{monthLabel(i.month)}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={labelCls}>Tên khoản</label><input name="name" required className={inputCls} placeholder="VD: Sửa khóa cửa" /></div>
-            <div><label className={labelCls}>Số tiền (đ)</label><input name="amount" type="number" required className={inputCls} /></div>
+            <div><label className={labelCls}>Số tiền (đ)</label><MoneyField name="amount" allowNegative required className={inputCls} /></div>
             <div className="flex items-end"><button className={btnCls}>Thêm khoản</button></div>
           </form>
         </section>

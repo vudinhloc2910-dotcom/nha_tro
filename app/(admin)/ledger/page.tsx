@@ -1,3 +1,4 @@
+import { MoneyField } from "../../money-field";
 import Link from "next/link";
 import { all } from "@/lib/db";
 import { currentHouse } from "@/lib/house";
@@ -44,7 +45,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
           <div><label className={labelCls}>Tháng</label><input name="month" type="month" defaultValue={currentMonth()} className={inputCls} /></div>
           <div><label className={labelCls}>Nhóm</label><select name="category" className={inputCls} defaultValue="phat_sinh">{Object.entries(CAT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div className="sm:col-span-2"><label className={labelCls}>Nội dung</label><input name="name" required className={inputCls} placeholder="VD: Thay bóng đèn hành lang" /></div>
-          <div><label className={labelCls}>Số tiền (đ)</label><input name="amount" type="number" min="0" required className={inputCls} /></div>
+          <div><label className={labelCls}>Số tiền (đ)</label><MoneyField name="amount" required className={inputCls} /></div>
           <div className="sm:col-span-6"><button className={btnCls}>Ghi vào sổ</button> <span className="ml-2 text-xs text-gray-500">Khoản chi vào đây sẽ tính vào báo cáo lãi lỗ của tháng đó.</span></div>
         </form>
       </section>

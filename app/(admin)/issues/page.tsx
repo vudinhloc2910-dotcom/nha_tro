@@ -1,3 +1,4 @@
+import { MoneyField } from "../../money-field";
 import Link from "next/link";
 import { all } from "@/lib/db";
 import { ago } from "@/lib/activity";
@@ -67,7 +68,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
               {i.status !== "done" && (
                 <form action={setIssueStatus} className="flex items-center gap-2">
                   <input type="hidden" name="id" value={i.id} /><input type="hidden" name="status" value="done" />
-                  <input name="cost" type="number" min="0" placeholder="Chi phí sửa (đ)" className={`${inputCls} w-40 py-1.5`} />
+                  <div className="w-40"><MoneyField name="cost" placeholder="Chi phí sửa (đ)" className={`${inputCls} py-1.5`} /></div>
                   <button className="rounded-md bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700">Đã xong</button>
                 </form>
               )}

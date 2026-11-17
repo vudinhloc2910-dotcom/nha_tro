@@ -373,6 +373,10 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
     const discount = toNum(inp.discount);
     setMonth("discount", discount === null || discount === 0 ? null : String(Math.abs(Math.round(discount))), null);
     setMonth("p_start", inp.periodStart || null, base.auto.periodStart);
+    // Ngày đóng tiền của phòng = ngày bắt đầu kỳ thu: sửa kỳ thu của tháng mới nhất thì các tháng sau tự theo ngày đó
+    if (inp.periodStart && DATE_RE.test(inp.periodStart) && inp.periodStart !== base.auto.periodStart) {
+      st.push({ sql: "UPDATE rooms SET due_day=? WHERE id=? AND COALESCE((SELECT MAX(month) FROM invoices WHERE room_id=?), '') <= ?", args: [Number(inp.periodStart.slice(8, 10)), R, R, M] });
+    }
     setMonth("p_end", inp.periodEnd || null, base.auto.periodEnd);
     for (const [sid, v] of Object.entries(inp.svc ?? {})) {
       if (!/^\d+$/.test(sid)) continue;

@@ -1,3 +1,4 @@
+import { MoneyField } from "../../money-field";
 import { currentHouse } from "@/lib/house";
 import { vnd } from "@/lib/format";
 import { roomTiles } from "@/lib/rooms";
@@ -47,7 +48,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
           <div><label className={labelCls}>Từ tầng</label><input name="from" type="number" min="1" max="40" defaultValue={1} className={inputCls} /></div>
           <div><label className={labelCls}>Đến tầng</label><input name="to" type="number" min="1" max="40" defaultValue={3} className={inputCls} /></div>
           <div><label className={labelCls}>Số phòng mỗi tầng</label><input name="per" type="number" min="1" max="40" defaultValue={4} className={inputCls} /></div>
-          <div><label className={labelCls}>Giá thuê chung (đ)</label><input name="rent" type="number" min="0" className={inputCls} placeholder="Sửa lại từng phòng sau" /></div>
+          <div><label className={labelCls}>Giá thuê chung (đ)</label><MoneyField name="rent" className={inputCls} placeholder="Sửa lại từng phòng sau" /></div>
           <div className="flex items-end"><button className={`${btnCls} w-full`}>Tạo phòng</button></div>
         </form>
       </section>
@@ -60,7 +61,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
           <div className="sm:col-span-4"><label className={labelCls}>Tên các phòng (cách nhau bằng dấu phẩy)</label><input name="names" className={inputCls} placeholder="VD: MB1, MB2, Kho" /></div>
           <div><label className={labelCls}>Hoặc số lượng</label><input name="count" type="number" min="0" max="40" className={inputCls} /></div>
           <div><label className={labelCls}>Tiền tố</label><input name="prefix" className={inputCls} placeholder="VD: T" /></div>
-          <div className="sm:col-span-2"><label className={labelCls}>Giá thuê chung (đ)</label><input name="rent" type="number" min="0" className={inputCls} /></div>
+          <div className="sm:col-span-2"><label className={labelCls}>Giá thuê chung (đ)</label><MoneyField name="rent" className={inputCls} /></div>
           <div className="flex items-end sm:col-span-2"><button className={`${btnCls} w-full`}>Thêm vào nhà</button></div>
         </form>
         <datalist id="floor-suggest"><option value="Tầng hầm" /><option value="Tầng trệt" /><option value="Tầng lửng" /><option value="Mặt bằng kinh doanh" /><option value="Sân thượng" /></datalist>
@@ -79,7 +80,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
         <summary className="cursor-pointer font-semibold">Thêm một phòng</summary>
         <form action={addRoom} className="mt-3 grid gap-3 sm:grid-cols-4">
           <div><label className={labelCls}>Số phòng</label><input name="code" required className={inputCls} /></div>
-          <div><label className={labelCls}>Giá thuê (đ)</label><input name="rent" type="number" min="0" className={inputCls} /></div>
+          <div><label className={labelCls}>Giá thuê (đ)</label><MoneyField name="rent" className={inputCls} /></div>
           <div><label className={labelCls}>Ngày đóng tiền</label><input name="due_day" type="number" min="1" max="31" defaultValue={15} className={inputCls} /></div>
           <div className="flex items-end"><button className={btnCls}>Thêm</button></div>
         </form>

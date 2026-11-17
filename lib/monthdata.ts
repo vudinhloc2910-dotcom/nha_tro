@@ -94,7 +94,8 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     const people = Math.max(1, Math.round(num(mo.get("people")) ?? r.people ?? 1));
     const debtAuto = pi ? Math.max(0, pi.total - pi.paid) : 0;
     // Kỳ thuê: tự nối tiếp từ hạn của kỳ trước; chưa có kỳ trước thì lấy ngày "hạn đóng" của phòng trong tháng này
-    const autoStart = pi?.due_date ?? `${month}-${pad(Math.min(Math.max(r.due_day, 1), 28))}`;
+    const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+    const autoStart = pi?.due_date ?? `${month}-${pad(Math.min(Math.max(r.due_day, 1), lastDay))}`;
     const autoEnd = addMonths(autoStart, 1);
     const periodEnd = mo.get("p_end") || inv?.due_date || autoEnd;
     const periodStart = mo.get("p_start") || inv?.period_start || (inv ? addMonths(periodEnd, -1) : autoStart);

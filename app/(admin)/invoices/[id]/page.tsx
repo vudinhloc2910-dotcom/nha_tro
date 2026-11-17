@@ -1,3 +1,4 @@
+import { MoneyField } from "../../../money-field";
 import Link from "next/link";
 import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
@@ -80,7 +81,7 @@ export default async function InvoicePage({
         )}
         <form action={addPayment} className="grid gap-3 sm:grid-cols-5">
           <input type="hidden" name="invoice_id" value={inv.id} />
-          <div><label className={labelCls}>Số tiền (đ)</label><input name="amount" type="number" min="1" defaultValue={remain || ""} required className={inputCls} /></div>
+          <div><label className={labelCls}>Số tiền (đ)</label><MoneyField name="amount" defaultValue={remain || ""} required className={inputCls} /></div>
           <div><label className={labelCls}>Hình thức</label><select name="method" className={inputCls}><option value="bank">Chuyển khoản</option><option value="cash">Tiền mặt</option></select></div>
           <div><label className={labelCls}>Ngày thu</label><DateVN name="paid_at" defaultValue={today()} className={inputCls} /></div>
           <div><label className={labelCls}>Ghi chú</label><input name="note" className={inputCls} /></div>
@@ -106,7 +107,7 @@ export default async function InvoicePage({
         <form action={addExtra} className="grid gap-3 sm:grid-cols-4">
           <input type="hidden" name="invoice_id" value={inv.id} />
           <div className="sm:col-span-2"><label className={labelCls}>Tên khoản (VD: Phí rác môi trường)</label><input name="name" required className={inputCls} /></div>
-          <div><label className={labelCls}>Số tiền (đ)</label><input name="amount" type="number" required className={inputCls} /></div>
+          <div><label className={labelCls}>Số tiền (đ)</label><MoneyField name="amount" allowNegative required className={inputCls} /></div>
           <div className="flex items-end"><button className={btnCls}>Thêm</button></div>
         </form>
       </section>}

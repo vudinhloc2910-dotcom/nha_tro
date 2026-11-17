@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { saveRoomProfile } from "./actions";
+import { MoneyField, fmtMoney } from "./money-field";
 import type { RoomView } from "@/lib/monthdata";
 
 type Svc = { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null };
@@ -55,8 +56,8 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
           <div className="sm:col-span-2"><label className={L}>Tên khách thuê</label><input className={inp} value={f.tenantName} onChange={(e) => set("tenantName", e.target.value)} /></div>
           <div><label className={L}>Số điện thoại</label><input className={inp} inputMode="tel" value={f.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           <div><label className={L}>Số người ở</label><input className={inp} type="number" min="1" value={f.people} onChange={(e) => set("people", e.target.value)} /></div>
-          <div><label className={L}>Giá thuê phòng (đ/tháng)</label><input className={inp} type="number" min="0" value={f.rent} onChange={(e) => set("rent", e.target.value)} /></div>
-          <div><label className={L}>Ngày đóng tiền (hàng tháng)</label><input className={inp} type="number" min="1" max="31" value={f.dueDay} onChange={(e) => set("dueDay", e.target.value)} /></div>
+          <div><label className={L}>Giá thuê phòng (đ/tháng)</label><MoneyField className={inp} value={f.rent} onChange={(v) => set("rent", v)} /></div>
+          <div><label className={L}>Ngày đóng tiền = ngày bắt đầu kỳ thu</label><input className={inp} type="number" min="1" max="31" value={f.dueDay} onChange={(e) => set("dueDay", e.target.value)} /></div>
           <div className="sm:col-span-2"><label className={L}>Ghi chú</label><input className={inp} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>
 
@@ -70,8 +71,8 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
         <h3 className="mb-1 mt-5 text-sm font-semibold">Đơn giá riêng của phòng</h3>
         <p className="mb-2 text-xs text-gray-500">Để trống = dùng giá chung của nhà.</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><label className={L}>Giá điện (đ/kWh)</label><input className={inp} type="number" min="0" value={f.elecPrice} placeholder={String(room.input.elecPrice)} onChange={(e) => set("elecPrice", e.target.value)} /></div>
-          <div><label className={L}>Giá nước ({room.input.waterMode === "person" ? "đ/người" : "đ/m³"})</label><input className={inp} type="number" min="0" value={f.waterPrice} placeholder={String(room.input.waterPrice)} onChange={(e) => set("waterPrice", e.target.value)} /></div>
+          <div><label className={L}>Giá điện (đ/kWh)</label><MoneyField className={inp} value={f.elecPrice} placeholder={fmtMoney(room.input.elecPrice)} onChange={(v) => set("elecPrice", v)} /></div>
+          <div><label className={L}>Giá nước ({room.input.waterMode === "person" ? "đ/người" : "đ/m³"})</label><MoneyField className={inp} value={f.waterPrice} placeholder={fmtMoney(room.input.waterPrice)} onChange={(v) => set("waterPrice", v)} /></div>
         </div>
 
         <h3 className="mb-1 mt-5 text-sm font-semibold">Giá dịch vụ của phòng</h3>
@@ -82,7 +83,7 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
               {services.filter((s) => !s.roomId || s.roomId === room.id).map((s) => (
                 <div key={s.id} className="grid grid-cols-[1fr_8rem_auto] items-center gap-2">
                   <span className="text-sm">{s.name} <span className="text-xs text-gray-500">({s.type === "person" ? "theo người" : s.type === "vehicle" ? "theo xe" : "theo phòng"})</span></span>
-                  <input className={`${inp} text-right`} type="number" min="0" value={svc[s.id].unit} placeholder={String(s.price)} disabled={svc[s.id].off} onChange={(e) => setSvc((p) => ({ ...p, [s.id]: { ...p[s.id], unit: e.target.value } }))} />
+                  <MoneyField className={inp} value={svc[s.id].unit} placeholder={fmtMoney(s.price)} disabled={svc[s.id].off} onChange={(v) => setSvc((p) => ({ ...p, [s.id]: { ...p[s.id], unit: v } }))} />
                   <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={svc[s.id].off} onChange={(e) => setSvc((p) => ({ ...p, [s.id]: { ...p[s.id], off: e.target.checked } }))} />Không thu</label>
                 </div>
               ))}
@@ -95,7 +96,7 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
             <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border border-dashed border-brand-300 bg-brand-50/40 p-2 sm:grid-cols-[1fr_7rem_7rem_9rem_auto]">
               <input className={`${inp} col-span-2 sm:col-span-1`} list="room-svc-suggest" placeholder="Tên (VD: Wifi)" value={n.name} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
               <select className={inp} value={n.type} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}><option value="room">Theo phòng</option><option value="person">Theo người</option><option value="vehicle">Theo xe</option></select>
-              <input className={`${inp} text-right`} type="number" min="0" placeholder="Giá (đ)" value={n.price} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} />
+              <MoneyField className={inp} placeholder="Giá" value={n.price} onChange={(v) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, price: v } : x)))} />
               <select className={inp} value={n.scope} onChange={(e) => setNewSvc((p) => p.map((x, j) => (j === i ? { ...x, scope: e.target.value } : x)))}><option value="room">Chỉ phòng này</option><option value="house">Cả nhà</option></select>
               <button type="button" aria-label="Bỏ dòng" onClick={() => setNewSvc((p) => p.filter((_, j) => j !== i))} className="px-1 text-lg text-gray-400 hover:text-red-600">✕</button>
             </div>
