@@ -953,3 +953,23 @@ export async function deleteRoomFile(id: number): Promise<{ ok: boolean; error?:
   refresh();
   return { ok: true };
 }
+
+/** Bật/tắt bảng thanh toán với chủ nhà của nhà đang chọn, chọn phòng chủ nhà đang ở và có trừ chi phí phòng đó hay không. */
+export async function saveLandlordSettings(inp: { enabled: boolean; roomId: number | null; deduct: boolean }): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const h = await currentHouse();
+  let roomId = 0;
+  if (inp.roomId) {
+    const r = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", Number(inp.roomId), h.id);
+    if (!r) return { ok: false, error: "Không tìm thấy phòng" };
+    roomId = r.id;
+  }
+  const up = "INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value";
+  await batch([
+    { sql: up, args: [h.id, "landlord_table", inp.enabled ? "1" : "0"] },
+    { sql: up, args: [h.id, "landlord_room", String(roomId)] },
+    { sql: up, args: [h.id, "landlord_deduct", inp.deduct ? "1" : "0"] },
+  ]);
+  refresh();
+  return { ok: true };
+}

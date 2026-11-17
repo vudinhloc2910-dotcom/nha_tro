@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { StatusText, useAutosave } from "./use-autosave";
-import { pinExpense, saveChiCategories, saveExpenseItems, saveNewRooms, unpinExpense } from "./actions";
+import { pinExpense, saveChiCategories, saveExpenseItems, saveLandlordSettings, saveNewRooms, unpinExpense } from "./actions";
+import { useRouter } from "next/navigation";
 import { vnd } from "@/lib/format";
 import type { LedgerMonth } from "@/lib/ledgermonth";
 
@@ -25,11 +26,20 @@ function MoneyInput({ value, onChange, placeholder }: { value: string; onChange:
 
 type Exp = { name: string; qty: string; unit: string; note: string };
 type NR = { room: string; rent: string; people: string; phone: string; total: string; note: string };
+export type RoomCost = { id: number; code: string; tenant: string; elec: number; water: number; svc: number };
 export type LiveThu = { dien: number; nuoc: number; mang: number; dich_vu: number; tien_phong: number; phat_sinh: number };
 
 
 /** Ba bảng dưới bảng hóa đơn (giống cuối tab sheet): Chi phí phát sinh, Thu tiền phòng mới, Chi tiết lợi nhuận. */
-export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveThu; ledger: LedgerMonth }) {
+export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; thu: LiveThu; ledger: LedgerMonth; roomCosts: RoomCost[] }) {
+  const router = useRouter();
+  const [ll, setLl] = useState(ledger.landlord);
+  async function saveLl(next: typeof ll) {
+    setLl(next);
+    const r = await saveLandlordSettings(next);
+    if (!r.ok) setMsg((p) => ({ ...p, ll: r.error ?? "Chưa lưu được" }));
+    else if (next.enabled !== ledger.landlord.enabled) router.refresh();
+  }
   const [items, setItems] = useState<Exp[]>(ledger.items.map((i) => ({ name: i.name, qty: String(i.qty), unit: String(i.unit), note: i.note })));
   const [rooms, setRooms] = useState<NR[]>(ledger.newRooms.map((r) => ({ room: r.room, rent: String(r.rent), people: String(r.people), phone: r.phone, total: String(r.total), note: r.note })));
   const [chi, setChi] = useState<Record<string, string>>({
@@ -189,6 +199,53 @@ export function MonthExtras({ month, thu, ledger }: { month: string; thu: LiveTh
         </div>
         <p className="mt-1 text-xs text-gray-500">Cột &quot;Tổng thu&quot; tự tính từ hóa đơn các phòng ngay trên màn hình. Nhập số tiền thực tế anh trả (điện, nước, mạng, dịch vụ, thuê nhà) vào cột &quot;Tổng chi&quot; để ra lãi.</p>
       </section>
+
+      {/* ===== Thanh toán thực tế với chủ nhà (nhà ở chung với chủ) ===== */}
+      {!ll.enabled ? (
+        <div className="rounded-2xl border border-dashed border-stone-300 bg-white/60 px-4 py-3 text-sm text-gray-600">
+          Nhà ở chung với chủ, tiền điện nước đóng theo mã điện cả nhà?{" "}
+          <button type="button" onClick={() => void saveLl({ ...ll, enabled: true })} className="font-semibold text-brand-700 hover:underline">Bật bảng thanh toán với chủ nhà</button>
+        </div>
+      ) : (() => {
+        const sel = roomCosts.find((r) => r.id === ll.roomId) ?? null;
+        const roomCost = sel ? sel.elec + sel.water + sel.svc : 0;
+        const rentOwed = rentFixed ? ledger.rentMonthly : num(chi.tien_phong);
+        const dien = num(chi.dien), nuoc = num(chi.nuoc);
+        const phatSinh = expTotal - investItems - salaryItems;
+        const deducted = dien + nuoc + phatSinh + (ll.deduct ? roomCost : 0);
+        const pay = rentOwed - deducted;
+        const line = "flex items-baseline justify-between gap-3 border-b border-gray-100 px-3 py-2";
+        return (
+          <section className="rounded-2xl border border-stone-200 border-t-4 border-t-teal-400 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-bold tracking-wide">THANH TOÁN THỰC TẾ VỚI CHỦ NHÀ · THÁNG {month.slice(5)}/{month.slice(0, 4)}</h2>
+              <button type="button" onClick={() => void saveLl({ ...ll, enabled: false })} className="text-xs text-gray-500 hover:underline">Tắt bảng này</button>
+            </div>
+            <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-gray-200">
+              <div className={`${line} bg-teal-50`}><span className="font-semibold text-teal-900">Tiền thuê nhà hàng tháng</span><span className="text-base font-bold tabular-nums text-teal-900">{vnd(rentOwed)}</span></div>
+              <div className={line}><span className="text-gray-700">− Tiền điện cả nhà <span className="text-xs text-gray-400">(nhập ở ô Điện, cột Tổng chi)</span></span><span className="font-semibold tabular-nums text-amber-800">{vnd(dien)}</span></div>
+              <div className={line}><span className="text-gray-700">− Tiền nước cả nhà <span className="text-xs text-gray-400">(nhập ở ô Nước, cột Tổng chi)</span></span><span className="font-semibold tabular-nums text-sky-800">{vnd(nuoc)}</span></div>
+              <div className={line}><span className="text-gray-700">− Chi phí phát sinh {phatSinh === 0 && <span className="text-xs text-gray-400">(không có)</span>}</span><span className="font-semibold tabular-nums">{vnd(phatSinh)}</span></div>
+              <div className={`${line} flex-wrap bg-gray-50`}>
+                <span className="flex flex-wrap items-center gap-2 text-gray-700">
+                  <label className="flex items-center gap-1.5"><input type="checkbox" checked={ll.deduct} onChange={(e) => void saveLl({ ...ll, deduct: e.target.checked })} />− Chi phí phòng chủ nhà ở:</label>
+                  <select value={ll.roomId ?? ""} onChange={(e) => void saveLl({ ...ll, roomId: e.target.value ? Number(e.target.value) : null })} className="rounded border border-gray-300 bg-white px-2 py-1 text-sm">
+                    <option value="">— chọn phòng —</option>
+                    {roomCosts.map((r) => <option key={r.id} value={r.id}>Phòng {r.code}{r.tenant ? ` (${r.tenant})` : ""}</option>)}
+                  </select>
+                </span>
+                <span className={`font-semibold tabular-nums ${ll.deduct ? "" : "text-gray-400 line-through"}`}>{vnd(roomCost)}</span>
+                {sel && <span className="w-full text-xs text-gray-500">Gồm điện {vnd(sel.elec)} + nước {vnd(sel.water)} + dịch vụ {vnd(sel.svc)} của phòng {sel.code} trong bảng hóa đơn phía trên. Bỏ tick nếu không muốn trừ.</span>}
+              </div>
+              <div className="flex items-baseline justify-between gap-3 bg-brand-50 px-3 py-3">
+                <span className="font-extrabold text-brand-900">{pay >= 0 ? "THỰC TẾ ANH ĐÓNG CHỦ NHÀ" : "CHỦ NHÀ CÒN PHẢI TRẢ LẠI ANH"}</span>
+                <span className={`text-xl font-extrabold tabular-nums ${pay >= 0 ? "text-brand-900" : "text-green-700"}`}>{vnd(Math.abs(pay))}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-center text-xs text-gray-500">Công thức: tiền thuê nhà − tiền điện − tiền nước − chi phí phát sinh{ll.deduct ? " − chi phí phòng chủ nhà ở" : ""}. Số liệu lấy từ các bảng phía trên, tự cập nhật khi anh sửa. <StatusText t={msg.ll} /></p>
+          </section>
+        );
+      })()}
     </div>
   );
 }

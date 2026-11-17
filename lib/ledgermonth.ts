@@ -10,6 +10,8 @@ export type LedgerMonth = {
   rentMonthly: number; salaryMonthly: number; partners: Partner[];
   /** Tên các khoản đã ghim (tự có ở các tháng sau) */
   pins: string[];
+  /** Bảng thanh toán thực tế với chủ nhà (nhà ở chung với chủ): bật/tắt, phòng chủ nhà ở, có trừ chi phí phòng đó không */
+  landlord: { enabled: boolean; roomId: number | null; deduct: boolean };
 };
 
 const parse = <T,>(s: string): Partial<T> => { try { return JSON.parse(s) as Partial<T>; } catch { return {}; } };
@@ -61,5 +63,6 @@ export async function loadLedgerMonth(houseId: number, month: string): Promise<L
     chi: { dien: sum("dien"), nuoc: sum("nuoc"), mang: sum("mang"), dich_vu: sum("dich_vu"), tien_phong: sum("tien_phong") },
     rentMonthly: Number(s.rent_cost_monthly) || 0, salaryMonthly: Number(s.manager_salary) || 0, partners: parsePartners(s.partners),
     pins: (pn as { name: string }[]).map((x) => x.name),
+    landlord: { enabled: s.landlord_table === "1", roomId: Number(s.landlord_room) || null, deduct: s.landlord_deduct !== "0" },
   };
 }

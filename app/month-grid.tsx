@@ -9,7 +9,7 @@ import { CopyButton } from "./copy-button";
 import { DateVN } from "./date-input";
 import { MoneyField, fmtMoney } from "./money-field";
 import { RoomEditor } from "./room-editor";
-import { MonthExtras, type LiveThu } from "./month-extras";
+import { MonthExtras, type LiveThu, type RoomCost } from "./month-extras";
 import type { LedgerMonth } from "@/lib/ledgermonth";
 import { computeInvoice, svcAuto, svcUnitLabel, type RoomInput } from "@/lib/calc";
 import { statusOf, vnd } from "@/lib/format";
@@ -184,6 +184,19 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
       else thu.dich_vu += l.amount;
     }
   }
+  // Chi phí từng phòng (điện + nước + dịch vụ) để chọn phòng chủ nhà ở trong bảng thanh toán với chủ nhà
+  const roomCosts: RoomCost[] = rooms.map((r) => {
+    const stored = invs[r.id];
+    const ls = stored?.lines && stored.lines.length && !dirty(r) ? stored.lines : calc(r).lines;
+    let elec = 0, water = 0, svc = 0;
+    for (const l of ls) {
+      if (l.label === "Tiền điện") elec += l.amount;
+      else if (l.label === "Tiền nước") water += l.amount;
+      else if (l.label === "Nợ kỳ trước" || l.label === "Tiền thuê phòng" || l.label === "Tiền phòng" || l.label.startsWith("Giảm") || l.detail === "Phụ phí phát sinh") continue;
+      else svc += l.amount;
+    }
+    return { id: r.id, code: r.code, tenant: r.tenantName, elec, water, svc };
+  });
   const T = (v: number) => vnd(v);
   const tN = (v: number) => (Math.round(v * 10) / 10).toLocaleString("vi-VN");
 
@@ -504,7 +517,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
           </tbody>
         </table>
       </div>
-      <MonthExtras key={JSON.stringify(ledger)} month={month} thu={thu} ledger={ledger} />
+      <MonthExtras key={JSON.stringify(ledger)} month={month} thu={thu} ledger={ledger} roomCosts={roomCosts} />
 
       {vacant.length > 0 && <p className="text-xs text-gray-500">Phòng đang trống: {vacant.join(", ")}.</p>}
       {rooms.some((r) => invs[r.id]?.locked) && <p className="text-xs text-brand-700">Hóa đơn ghi &quot;(từ sheet)&quot; được nhập từ sheet cũ. Sửa ô nào trong cột đó thì hóa đơn được tính lại theo giá hiện tại của phòng.</p>}
