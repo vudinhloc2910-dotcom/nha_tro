@@ -517,7 +517,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
           </tbody>
         </table>
       </div>
-      <MonthExtras key={JSON.stringify(ledger)} month={month} thu={thu} ledger={ledger} roomCosts={roomCosts} />
+      <MonthExtras key={JSON.stringify({ ...ledger, landlord: null })} month={month} thu={thu} ledger={ledger} roomCosts={roomCosts} />
 
       {vacant.length > 0 && <p className="text-xs text-gray-500">Phòng đang trống: {vacant.join(", ")}.</p>}
       {rooms.some((r) => invs[r.id]?.locked) && <p className="text-xs text-brand-700">Hóa đơn ghi &quot;(từ sheet)&quot; được nhập từ sheet cũ. Sửa ô nào trong cột đó thì hóa đơn được tính lại theo giá hiện tại của phòng.</p>}

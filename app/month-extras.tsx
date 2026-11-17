@@ -33,11 +33,13 @@ export type LiveThu = { dien: number; nuoc: number; mang: number; dich_vu: numbe
 /** Ba bảng dưới bảng hóa đơn (giống cuối tab sheet): Chi phí phát sinh, Thu tiền phòng mới, Chi tiết lợi nhuận. */
 export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; thu: LiveThu; ledger: LedgerMonth; roomCosts: RoomCost[] }) {
   const router = useRouter();
-  const [ll, setLl] = useState({ enabled: ledger.landlord.enabled, elecRoomId: ledger.landlord.elecRoomId, waterRoomId: ledger.landlord.waterRoomId });
+  const [ll, setLl] = useState({ enabled: ledger.landlord.enabled, elecRoomIds: ledger.landlord.elecRoomIds, waterRoomIds: ledger.landlord.waterRoomIds, name: ledger.landlord.name });
+  const [llToken, setLlToken] = useState(ledger.landlord.token);
   const [llExtras, setLlExtras] = useState<{ name: string; amount: string }[]>(ledger.landlord.extras);
   async function saveLl(next: typeof ll) {
     setLl(next);
     const r = await saveLandlordSettings(next);
+    if (r.ok && r.token) setLlToken(r.token);
     if (!r.ok) setMsg((p) => ({ ...p, ll: r.error ?? "Chưa lưu được" }));
     else if (next.enabled !== ledger.landlord.enabled) router.refresh();
   }
@@ -210,14 +212,13 @@ export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; 
         </div>
       ) : (() => {
         const rentOwed = rentFixed ? ledger.rentMonthly : num(chi.tien_phong);
-        const eRoom = roomCosts.find((r) => r.id === ll.elecRoomId) ?? null;
-        const wRoom = roomCosts.find((r) => r.id === ll.waterRoomId) ?? null;
-        const dien = eRoom ? eRoom.elec : 0, nuoc = wRoom ? wRoom.water : 0;
+        const eRooms = roomCosts.filter((r) => ll.elecRoomIds.includes(r.id));
+        const wRooms = roomCosts.filter((r) => ll.waterRoomIds.includes(r.id));
+        const dien = eRooms.reduce((t, r) => t + r.elec, 0), nuoc = wRooms.reduce((t, r) => t + r.water, 0);
         const phatSinh = llExtras.reduce((a, r) => a + Math.round(num(r.amount)), 0);
         const pay = rentOwed - dien - nuoc - phatSinh;
         const line = "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-gray-100 px-3 py-2";
         const sel = "rounded border border-gray-300 bg-white px-2 py-1 text-sm";
-        const opts = roomCosts.map((r) => <option key={r.id} value={r.id}>Phòng {r.code}{r.tenant ? ` (${r.tenant})` : ""}</option>);
         return (
           <section className="rounded-2xl border border-stone-200 border-t-4 border-t-teal-400 bg-white p-4 shadow-sm">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -226,20 +227,25 @@ export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; 
             </div>
             <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-gray-200">
               <div className={`${line} bg-teal-50`}><span className="font-semibold text-teal-900">Tiền thuê nhà hàng tháng</span><span className="text-base font-bold tabular-nums text-teal-900">{vnd(rentOwed)}</span></div>
-              <div className={line}>
-                <span className="flex flex-wrap items-center gap-2 text-gray-700">− Tiền điện của
-                  <select value={ll.elecRoomId ?? ""} onChange={(e) => void saveLl({ ...ll, elecRoomId: e.target.value ? Number(e.target.value) : null })} className={sel}><option value="">— chọn phòng —</option>{opts}</select>
-                </span>
-                <span className="font-semibold tabular-nums text-amber-800">{vnd(dien)}</span>
-                {eRoom && <span className="w-full text-xs text-gray-500">Tiền điện của phòng {eRoom.code} trong bảng hóa đơn phía trên.</span>}
-              </div>
-              <div className={line}>
-                <span className="flex flex-wrap items-center gap-2 text-gray-700">− Tiền nước của
-                  <select value={ll.waterRoomId ?? ""} onChange={(e) => void saveLl({ ...ll, waterRoomId: e.target.value ? Number(e.target.value) : null })} className={sel}><option value="">— chọn phòng —</option>{opts}</select>
-                </span>
-                <span className="font-semibold tabular-nums text-sky-800">{vnd(nuoc)}</span>
-                {wRoom && <span className="w-full text-xs text-gray-500">Tiền nước của phòng {wRoom.code} trong bảng hóa đơn phía trên.</span>}
-              </div>
+              {([["Tiền điện", "elecRoomIds", eRooms, dien, "elec", "text-amber-800"], ["Tiền nước", "waterRoomIds", wRooms, nuoc, "water", "text-sky-800"]] as const).map(([title, key, chosen, amount, f, tone]) => (
+                <div key={key} className={line}>
+                  <span className="text-gray-700">− {title} của các phòng:</span>
+                  <span className={`font-semibold tabular-nums ${tone}`}>{vnd(amount)}</span>
+                  <div className="flex w-full flex-wrap items-center gap-1.5">
+                    {chosen.map((r) => (
+                      <span key={r.id} className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-gray-50 py-0.5 pl-2.5 pr-1 text-xs">
+                        Phòng {r.code}: <b className="tabular-nums">{vnd(r[f])}</b>
+                        <button type="button" aria-label={`Bỏ phòng ${r.code}`} onClick={() => void saveLl({ ...ll, [key]: ll[key].filter((x) => x !== r.id) })} className="rounded-full px-1 text-gray-400 hover:text-red-600">✕</button>
+                      </span>
+                    ))}
+                    <select value="" onChange={(e) => { const id = Number(e.target.value); if (id) void saveLl({ ...ll, [key]: [...ll[key], id] }); }} className={sel}>
+                      <option value="">{chosen.length ? "+ thêm phòng" : "— chọn phòng —"}</option>
+                      {roomCosts.filter((r) => !ll[key].includes(r.id)).map((r) => <option key={r.id} value={r.id}>Phòng {r.code}{r.tenant ? ` (${r.tenant})` : ""}</option>)}
+                    </select>
+                    {chosen.length < roomCosts.length && roomCosts.length > 1 && <button type="button" onClick={() => void saveLl({ ...ll, [key]: roomCosts.map((r) => r.id) })} className="text-xs text-brand-700 hover:underline">chọn tất cả</button>}
+                  </div>
+                </div>
+              ))}
               <div className="border-b border-gray-100 px-3 py-2" onBlur={lx.flush}>
                 <div className="mb-1 flex items-baseline justify-between gap-3"><span className="text-gray-700">− Chi phí phát sinh <span className="text-xs text-gray-400">(tự điền nội dung - số tiền, nếu có)</span></span><span className="font-semibold tabular-nums">{vnd(phatSinh)}</span></div>
                 <div className="space-y-1.5">
@@ -258,7 +264,19 @@ export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; 
                 <span className={`text-xl font-extrabold tabular-nums ${pay >= 0 ? "text-brand-900" : "text-green-700"}`}>{vnd(Math.abs(pay))}</span>
               </div>
             </div>
-            <p className="mt-2 text-center text-xs text-gray-500">Công thức: tiền thuê nhà − tiền điện − tiền nước − chi phí phát sinh. Tiền điện, nước lấy theo phòng anh chọn; phát sinh anh tự điền. <StatusText t={msg.ll} /></p>
+            <p className="mt-2 text-center text-xs text-gray-500">Công thức: tiền thuê nhà − tiền điện − tiền nước − chi phí phát sinh. Tiền điện, nước lấy theo các phòng anh chọn; phát sinh anh tự điền. <StatusText t={msg.ll} /></p>
+            <div className="mx-auto mt-3 flex max-w-2xl flex-wrap items-end gap-3 rounded-xl border border-dashed border-teal-300 bg-teal-50/40 p-3">
+              <div className="min-w-[12rem] flex-1">
+                <label className="mb-1 block text-xs font-medium text-gray-600">Tên chủ nhà (ghi trên bill, không bắt buộc)</label>
+                <input className={inp} value={ll.name} placeholder="VD: Anh Mười" onChange={(e) => setLl({ ...ll, name: e.target.value })} onBlur={() => void saveLl(ll)} />
+              </div>
+              {llToken ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <a href={`/bill/${llToken}/${month}`} target="_blank" rel="noopener" className="rounded-lg bg-gradient-to-b from-brand-600 to-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:from-brand-700 hover:to-brand-800">Xem bill để gửi chủ nhà</a>
+                  <button type="button" onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/bill/${llToken}/${month}`); setMsg((p) => ({ ...p, ll: "Đã chép link bill" })); }} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm hover:bg-gray-50">Chép link</button>
+                </div>
+              ) : <span className="text-xs text-gray-500">Chọn phòng điện/nước để tạo bill gửi chủ nhà.</span>}
+            </div>
           </section>
         );
       })()}

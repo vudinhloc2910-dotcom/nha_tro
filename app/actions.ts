@@ -1,5 +1,6 @@
 "use server";
 
+import crypto from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { checkPassword, clearSession, requireAdmin, setPassword, setSession } from "@/lib/auth";
@@ -954,25 +955,24 @@ export async function deleteRoomFile(id: number): Promise<{ ok: boolean; error?:
   return { ok: true };
 }
 
-/** Bảng thanh toán với chủ nhà: bật/tắt, phòng lấy tiền điện, phòng lấy tiền nước (chọn từ các phòng trong nhà). */
-export async function saveLandlordSettings(inp: { enabled: boolean; elecRoomId: number | null; waterRoomId: number | null }): Promise<{ ok: boolean; error?: string }> {
+/** Bảng thanh toán với chủ nhà: bật/tắt, các phòng lấy tiền điện, các phòng lấy tiền nước, tên chủ nhà (hiện trên bill). Tạo mã link bill nếu chưa có. */
+export async function saveLandlordSettings(inp: { enabled: boolean; elecRoomIds: number[]; waterRoomIds: number[]; name: string }): Promise<{ ok: boolean; error?: string; token?: string }> {
   await requireAdmin();
   const h = await currentHouse();
-  const own = async (id: number | null) => {
-    if (!id) return 0;
-    const r = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", Number(id), h.id);
-    return r ? r.id : -1;
-  };
-  const e = await own(inp.elecRoomId), w = await own(inp.waterRoomId);
-  if (e < 0 || w < 0) return { ok: false, error: "Không tìm thấy phòng" };
+  const mine = new Set((await all<{ id: number }>("SELECT id FROM rooms WHERE house_id=?", h.id)).map((r) => r.id));
+  const pick = (a: number[]) => [...new Set((a ?? []).map(Number))].filter((n) => mine.has(n));
   const up = "INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value";
+  const existing = await one<{ value: string }>("SELECT value FROM house_settings WHERE house_id=? AND key='landlord_bill_token'", h.id);
+  const token = existing?.value || crypto.randomBytes(12).toString("hex");
   await batch([
     { sql: up, args: [h.id, "landlord_table", inp.enabled ? "1" : "0"] },
-    { sql: up, args: [h.id, "landlord_elec_room", String(e)] },
-    { sql: up, args: [h.id, "landlord_water_room", String(w)] },
+    { sql: up, args: [h.id, "landlord_elec_room", pick(inp.elecRoomIds).join(",")] },
+    { sql: up, args: [h.id, "landlord_water_room", pick(inp.waterRoomIds).join(",")] },
+    { sql: up, args: [h.id, "landlord_name", String(inp.name ?? "").trim().slice(0, 80)] },
+    { sql: up, args: [h.id, "landlord_bill_token", token] },
   ]);
   refresh();
-  return { ok: true };
+  return { ok: true, token };
 }
 
 /** Chi phí phát sinh (nội dung - số tiền) tự điền của tháng trong bảng thanh toán với chủ nhà. */
