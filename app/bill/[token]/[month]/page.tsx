@@ -8,7 +8,7 @@ import { PrintButton } from "../../../print-button";
 
 export const metadata: Metadata = { title: "Bảng thanh toán tiền nhà", robots: { index: false, follow: false } };
 
-const THANKS = "🌸 Trân trọng cảm ơn Quý khách hàng đã tin tưởng lựa chọn công ty chúng tôi. Kính chúc Quý khách và gia đình luôn dồi dào sức khỏe, bình an và gặp nhiều may mắn! 🌸";
+const THANKS = "🌸 Trân trọng cảm ơn Quý khách hàng đã tin tưởng lựa chọn công ty chúng tôi. Kính chúc Quý khách và gia đình sức khỏe, bình an và gặp nhiều may mắn! 🌸";
 
 /** Bill thanh toán tiền nhà gửi chủ nhà. Mở bằng link có mã riêng, không cần đăng nhập. */
 export default async function LandlordBillPage({ params }: { params: Promise<{ token: string; month: string }> }) {
@@ -19,14 +19,17 @@ export default async function LandlordBillPage({ params }: { params: Promise<{ t
   const b = await loadLandlordBill(row.house_id, month);
   const dash = "border-t border-dashed border-gray-400";
   const to = b.landlordName.trim() || "Chủ nhà";
-  const Group = ({ title, rows, total }: { title: string; rows: { label: string; amount: number }[]; total: number }) => (
+  const Group = ({ title, rows, total }: { title: string; rows: { label: string; amount: number; detail?: string }[]; total: number }) => (
     <li>
       <div className="flex items-baseline justify-between gap-3">
         <span className="font-medium">{title}</span>
-        <span className="whitespace-nowrap font-semibold text-red-700">-{vnd(total)}</span>
+        <span className={`whitespace-nowrap font-semibold ${total ? "text-red-700" : "text-gray-400"}`}>{total ? "-" : ""}{vnd(total)}</span>
       </div>
       {rows.length === 0 ? <div className="text-xs text-gray-400">Không có</div> : rows.map((r, i) => (
-        <div key={i} className="flex items-baseline justify-between gap-3 pl-3 text-xs text-gray-500"><span>{r.label}</span><span className="whitespace-nowrap">{vnd(r.amount)}</span></div>
+        <div key={i} className="pl-3 text-xs text-gray-600">
+          <div className="flex items-baseline justify-between gap-3"><span className="font-medium">{r.label}</span><span className="whitespace-nowrap">{vnd(r.amount)}</span></div>
+          {r.detail && <div className="text-[11px] text-gray-400">{r.detail}</div>}
+        </div>
       ))}
     </li>
   );
@@ -54,15 +57,15 @@ export default async function LandlordBillPage({ params }: { params: Promise<{ t
             <span className="font-medium">Tiền thuê nhà hàng tháng</span>
             <span className="whitespace-nowrap font-semibold">{vnd(b.rent)}</span>
           </li>
-          <Group title="Trừ tiền điện" total={b.elecTotal} rows={b.elec.map((r) => ({ label: `Phòng ${r.code}`, amount: r.amount }))} />
-          <Group title="Trừ tiền nước" total={b.waterTotal} rows={b.water.map((r) => ({ label: `Phòng ${r.code}`, amount: r.amount }))} />
+          <Group title="Trừ tiền điện" total={b.elecTotal} rows={b.elec.map((r) => ({ label: `Phòng ${r.code}`, amount: r.amount, detail: r.detail }))} />
+          <Group title="Trừ tiền nước" total={b.waterTotal} rows={b.water.map((r) => ({ label: `Phòng ${r.code}`, amount: r.amount, detail: r.detail }))} />
           <Group title="Trừ chi phí phát sinh" total={b.extraTotal} rows={b.extras.map((r) => ({ label: r.name, amount: r.amount }))} />
         </ul>
 
         <div className={`${dash} my-3`} />
-        <div className="flex items-baseline justify-between rounded-md bg-gray-100 px-3 py-2 text-lg font-extrabold">
-          <span>{b.pay >= 0 ? "THỰC THANH TOÁN" : "CHỦ NHÀ HOÀN LẠI"}</span>
-          <span className={b.pay >= 0 ? "text-brand-900" : "text-green-700"}>{vnd(Math.abs(b.pay))}</span>
+        <div className="flex items-baseline justify-between gap-2 rounded-md bg-gray-100 px-3 py-2 font-extrabold">
+          <span className="text-sm">{b.pay >= 0 ? "THỰC THANH TOÁN" : "CHỦ NHÀ HOÀN LẠI"}</span>
+          <span className={`whitespace-nowrap text-base ${b.pay >= 0 ? "text-brand-900" : "text-green-700"}`}>{vnd(Math.abs(b.pay))}</span>
         </div>
         <p className="mt-1 text-center text-[11px] text-gray-500">= Tiền thuê nhà − tiền điện − tiền nước − chi phí phát sinh</p>
 

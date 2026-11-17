@@ -2,7 +2,7 @@ import { one } from "./db";
 import { computeInvoice } from "./calc";
 import { loadMonth, type RoomView } from "./monthdata";
 
-export type BillRoom = { code: string; amount: number };
+export type BillRoom = { code: string; amount: number; detail: string };
 export type LandlordBill = {
   houseName: string; houseAddress: string; housePhone: string; landlordName: string; month: string;
   rent: number; elec: BillRoom[]; water: BillRoom[]; extras: { name: string; amount: number }[];
@@ -15,13 +15,14 @@ const ids = (v?: string) => (v ?? "").split(",").map(Number).filter((n) => n > 0
 export async function loadLandlordBill(houseId: number, month: string): Promise<LandlordBill> {
   const md = await loadMonth(houseId, month);
   const s = md.settings;
+  // Số tiền và chi tiết (số cũ → số mới = số dùng × đơn giá) của dòng điện/nước trong hóa đơn của phòng
   const take = (r: RoomView, label: string) => {
-    const ls = r.invoice?.lines?.length ? r.invoice.lines : computeInvoice(r.input).lines;
-    return ls.filter((l) => l.label === label).reduce((a, l) => a + l.amount, 0);
+    const ls = (r.invoice?.lines?.length ? r.invoice.lines : computeInvoice(r.input).lines).filter((l) => l.label === label);
+    return { amount: ls.reduce((a, l) => a + l.amount, 0), detail: ls.map((l) => l.detail).filter(Boolean).join("; ") };
   };
   const eIds = ids(s.landlord_elec_room), wIds = ids(s.landlord_water_room);
-  const elec = md.rooms.filter((r) => eIds.includes(r.id)).map((r) => ({ code: r.code, amount: take(r, "Tiền điện") }));
-  const water = md.rooms.filter((r) => wIds.includes(r.id)).map((r) => ({ code: r.code, amount: take(r, "Tiền nước") }));
+  const elec = md.rooms.filter((r) => eIds.includes(r.id)).map((r) => ({ code: r.code, ...take(r, "Tiền điện") }));
+  const water = md.rooms.filter((r) => wIds.includes(r.id)).map((r) => ({ code: r.code, ...take(r, "Tiền nước") }));
   let rent = Number(s.rent_cost_monthly) || 0;
   if (!rent) rent = Number((await one<{ a: number }>("SELECT COALESCE(SUM(amount),0) a FROM ledger WHERE house_id=? AND month=? AND kind='chi' AND category='tien_phong'", houseId, month))?.a ?? 0);
   let extras: { name: string; amount: number }[] = [];
