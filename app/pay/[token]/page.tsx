@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSettings, one, readAll } from "@/lib/db";
+import { LogoMark } from "../../logo";
 import { dateVN, monthLabel, payWindowText, statusOf, vnd } from "@/lib/format";
 import { PrintButton } from "../../print-button";
 import { reportIssue } from "../../actions";
@@ -47,6 +48,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
     <main className="mx-auto max-w-sm px-3 py-5 print:max-w-none print:p-0">
       <div className="rounded-xl bg-white p-5 text-gray-900 shadow-md print:rounded-none print:shadow-none">
         <header className="text-center">
+          <LogoMark size={44} className="mx-auto mb-2" />
           <h1 className="text-lg font-extrabold uppercase tracking-wide text-brand-900">Nhà trọ {s.house_name}</h1>
           {s.house_address && <p className="text-xs text-gray-600">{s.house_address}</p>}
           {s.house_phone && <p className="text-xs text-gray-600">ĐT: {s.house_phone}</p>}

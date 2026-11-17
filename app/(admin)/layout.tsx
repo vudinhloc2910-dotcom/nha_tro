@@ -9,6 +9,7 @@ import { HouseSwitcher } from "../house-switcher";
 import { MonthPicker } from "../month-picker";
 import { BottomNav } from "../bottom-nav";
 import { TopNav } from "../top-nav";
+import { Logo } from "../logo";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
@@ -19,8 +20,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const badge = todos.filter((t) => !t.done).length;
   return (
     <div>
-      <header className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white/95 backdrop-blur">
+      <header className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white/95 shadow-[0_1px_0_0_rgba(15,23,42,0.03)] backdrop-blur">
+        <div className="h-[3px] bg-gradient-to-r from-brand-400 via-brand-600 to-amber-400" />
         <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
+          <Link href="/overview" className="mr-1 hidden shrink-0 md:inline-flex" aria-label="Về trang Tổng quan"><Logo size={32} /></Link>
           <MonthPicker month={month} />
           <HouseSwitcher houses={houses} currentId={house.id} />
           <TopNav badge={badge} />

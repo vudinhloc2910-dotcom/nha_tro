@@ -13,9 +13,16 @@
   --color-brand-800: #1f4a87;
   --color-brand-900: #1b3d6e;
   --color-cream: #f2f7fc;
+  /* Màu nhấn ấm (cửa, nút nổi bật) và màu trạng thái dùng thống nhất khắp app */
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
 }
 
 html { -webkit-text-size-adjust: 100%; }
+body { background-image: radial-gradient(1200px 500px at 50% -120px, #dcecfd 0%, rgba(242,247,252,0) 70%); background-repeat: no-repeat; }
+/* Con trỏ rõ ràng và chuyển màu mượt cho nút, liên kết */
+button, a { transition: background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease; }
+button:focus-visible, a:focus-visible, [role="button"]:focus-visible { outline: 2px solid #3b8ae6; outline-offset: 2px; }
 /* Ẩn nút mũi tên lên/xuống trong ô số (đưa chuột hay bị nhảy nhầm số) */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
