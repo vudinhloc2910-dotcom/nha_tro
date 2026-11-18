@@ -3,6 +3,7 @@ import { listHouses } from "@/lib/db";
 import { monthLabel, STATUS_CLASS, STATUS_LABEL, vnd } from "@/lib/format";
 import { hasFilters, parseParams, runSearch, TYPE_LABEL, type SearchType } from "@/lib/search";
 import { MoneyField } from "../../money-field";
+import { DateVN } from "../../date-input";
 import { btnCls, btnGhostCls, cardCls, inputCls, labelCls } from "@/lib/ui";
 
 const TYPE_TONE: Record<SearchType, string> = {
@@ -38,8 +39,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             <option value="">Tất cả các nhà</option>
             {houses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select></div>
-        <div><label className={labelCls}>Từ tháng</label><input name="from" type="month" defaultValue={p.from} className={inputCls} /></div>
-        <div><label className={labelCls}>Đến tháng</label><input name="to" type="month" defaultValue={p.to} className={inputCls} /></div>
+        <div><label className={labelCls}>Từ ngày</label><DateVN name="from" defaultValue={p.from} className={inputCls} /></div>
+        <div><label className={labelCls}>Đến ngày</label><DateVN name="to" defaultValue={p.to} className={inputCls} /></div>
         <div><label className={labelCls}>Trạng thái hóa đơn</label>
           <select name="status" defaultValue={p.status} className={inputCls}>
             <option value="">Tất cả</option>
@@ -47,11 +48,21 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           </select></div>
         <div><label className={labelCls}>Số tiền từ</label><MoneyField name="min" defaultValue={p.min ?? ""} className={inputCls} placeholder="0" /></div>
         <div><label className={labelCls}>Số tiền đến</label><MoneyField name="max" defaultValue={p.max ?? ""} className={inputCls} placeholder="không giới hạn" /></div>
+        <div className="sm:col-span-2 lg:col-span-4 rounded-xl border border-teal-200 bg-teal-50/50 p-3">
+          <p className="mb-2 text-sm font-semibold text-teal-900">Lọc phòng theo giá <span className="font-normal text-teal-800">(chỉ hiện phòng; giá riêng của phòng được ưu tiên, không có thì lấy giá chung của nhà)</span></p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div><label className={labelCls}>Giá điện (đ/kWh)</label><input name="elec" defaultValue={p.elec} placeholder="VD: 3500 hoặc 3500, 3800" className={inputCls} /></div>
+            <div><label className={labelCls}>Giá nước</label><input name="water" defaultValue={p.water} placeholder="VD: 35000 hoặc 20000-40000" className={inputCls} /></div>
+            <div><label className={labelCls}>Tên dịch vụ</label><input name="svc" defaultValue={p.svc} placeholder="VD: wifi, giặt, rác, xe" className={inputCls} /></div>
+            <div><label className={labelCls}>Giá dịch vụ</label><input name="svcPrice" defaultValue={p.svcPrice} placeholder="VD: 100000" className={inputCls} /></div>
+          </div>
+          <p className="mt-2 text-xs text-gray-600">Nhập một giá, nhiều giá cách nhau dấu phẩy (3500, 3800) hoặc một khoảng (3500-4000). Có thể gõ 3.500 hay 3500 đều được.</p>
+        </div>
         <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-4">
           <button className={btnCls}>Tìm kiếm</button>
           <Link href="/search" className={btnGhostCls}>Xóa bộ lọc</Link>
           {result && result.total > 0 && <a href={`/search/export?${qs}`} className={btnGhostCls}>Tải về Excel (CSV)</a>}
-          <span className="text-xs text-gray-500">Lọc tháng, trạng thái, số tiền áp dụng cho hóa đơn, sổ thu chi, sự cố.</span>
+          <span className="text-xs text-gray-500">Lọc ngày: hóa đơn tính theo kỳ thu, sự cố theo ngày báo, sổ thu chi theo tháng. Trạng thái và số tiền áp dụng cho hóa đơn, sổ thu chi, sự cố.</span>
         </div>
       </form>
 
