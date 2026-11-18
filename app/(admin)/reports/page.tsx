@@ -27,7 +27,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <h1 className="text-xl font-bold">Báo cáo thu chi {year}</h1>
           <p className="text-sm text-gray-600">{house.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/reports/all" className="rounded-md border border-brand-300 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-100">Báo cáo quản trị các nhà →</Link>
           {[2025, 2026, 2027].map((y) => (
             <Link key={y} href={`/reports?year=${y}`} className={`rounded-md border px-3 py-1.5 text-sm ${y === year ? "border-brand-700 bg-brand-700 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{y}</Link>
           ))}
