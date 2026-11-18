@@ -25,6 +25,7 @@ const MORE = [
   { href: "/tenants", label: "Khách thuê" },
   { href: "/history", label: "Lịch sử thu tiền" },
   { href: "/settings", label: "Cài đặt" },
+  { href: "/search", label: "Tìm kiếm" },
   { href: "/issues", label: "Sự cố và bảo trì" },
   { href: "/ledger", label: "Sổ thu chi" },
   { href: "/invoices", label: "Danh sách hóa đơn" },

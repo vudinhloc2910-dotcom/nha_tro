@@ -14,6 +14,7 @@ const MAIN = [
   { href: "/settings", label: "Cài đặt", on: "bg-slate-200 text-slate-900", dot: "bg-slate-500" },
 ];
 const MORE = [
+  { href: "/search", label: "Tìm kiếm nâng cao" },
   { href: "/issues", label: "Sự cố và bảo trì" },
   { href: "/ledger", label: "Sổ thu chi" },
   { href: "/invoices", label: "Danh sách hóa đơn" },

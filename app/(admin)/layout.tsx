@@ -10,6 +10,7 @@ import { MonthPicker } from "../month-picker";
 import { BottomNav } from "../bottom-nav";
 import { TopNav } from "../top-nav";
 import { Logo } from "../logo";
+import { SearchBox } from "../search-box";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
@@ -28,6 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <HouseSwitcher houses={houses} currentId={house.id} />
           <TopNav badge={badge} />
           <div className="ml-auto hidden items-center gap-4 md:flex">
+            <SearchBox />
             <Link href="/account" className="text-sm text-gray-600 hover:underline">Đổi mật khẩu</Link>
             <form action={logout}><button className="text-sm text-gray-600 hover:underline">Đăng xuất</button></form>
           </div>
