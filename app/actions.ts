@@ -374,12 +374,14 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
     setMonth("debt", debt === null ? null : String(Math.max(0, Math.round(debt))), String(base.auto.debt));
     const discount = toNum(inp.discount);
     setMonth("discount", discount === null || discount === 0 ? null : String(Math.abs(Math.round(discount))), null);
-    if (inp.periodStart) setMonth("p_start", inp.periodStart, base.auto.periodStart); // ngày trống: giữ nguyên kỳ thu đã lưu
+    // Kỳ thu luôn lưu đúng ngày chủ trọ nhập, kể cả khi trùng ngày tự tính (trước đây trùng thì bị xóa và web quay về ngày cũ của hóa đơn, nên cứ "nhảy về 15")
+    const up = "INSERT INTO room_month(room_id,month,key,value) VALUES (?,?,?,?) ON CONFLICT(room_id,month,key) DO UPDATE SET value=excluded.value";
+    if (inp.periodStart) st.push({ sql: up, args: [R, M, "p_start", inp.periodStart] }); // ngày trống: giữ nguyên kỳ thu đã lưu
     // Ngày đóng tiền của phòng = ngày bắt đầu kỳ thu: sửa kỳ thu của tháng mới nhất thì các tháng sau tự theo ngày đó
     if (inp.periodStart && DATE_RE.test(inp.periodStart) && inp.periodStart !== base.auto.periodStart) {
       st.push({ sql: "UPDATE rooms SET due_day=? WHERE id=? AND COALESCE((SELECT MAX(month) FROM invoices WHERE room_id=?), '') <= ?", args: [Number(inp.periodStart.slice(8, 10)), R, R, M] });
     }
-    if (inp.periodEnd) setMonth("p_end", inp.periodEnd, base.auto.periodEnd);
+    if (inp.periodEnd) st.push({ sql: up, args: [R, M, "p_end", inp.periodEnd] });
     for (const [sid, v] of Object.entries(inp.svc ?? {})) {
       if (!/^\d+$/.test(sid)) continue;
       const n = toNum(v);
