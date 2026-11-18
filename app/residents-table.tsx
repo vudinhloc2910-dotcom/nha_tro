@@ -40,7 +40,7 @@ function parsePaste(text: string): ResidentRow[] {
     rows[hi].forEach((c, i) => {
       const n = norm(c);
       if (n === "stt") col.stt = i;
-      else if (/^phong/.test(n)) col.room = i;
+      else if (/phong/.test(n)) col.room = i; // "Phòng", "Tên phòng", "Số phòng"
       else if (/^(ten|ho ten|ho va ten)/.test(n)) col.name = i;
       else if (/cccd|cmnd|can cuoc/.test(n)) col.cccd = i;
       else if (n === "nam") col.nam = i;
