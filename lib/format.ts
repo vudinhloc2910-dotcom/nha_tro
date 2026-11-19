@@ -12,12 +12,11 @@ export function dateVN(d: string) {
 }
 /** Số ngày khách được đóng tiền kể từ ngày đầu kỳ thu. */
 export const PAY_WINDOW_DAYS = 5;
-/** "Hạn đóng" ghi trên hóa đơn: từ ngày đầu kỳ thu đến ngày thứ +5 (VD kỳ 30/10 → "30/10 - 05/11/2026"). Không có ngày đầu kỳ thì chỉ hiện hạn cuối kỳ. */
+/** "Hạn đóng" ghi trên hóa đơn: từ ngày đầu kỳ thu đến +5 ngày, ghi đủ ngày/tháng/năm hai vế (VD kỳ 30/10/2026 → "30/10/2026 - 04/11/2026"). Không có ngày đầu kỳ thì chỉ hiện hạn cuối kỳ. */
 export function payWindowText(periodStart: string | null | undefined, dueDate: string): string {
   if (!periodStart || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) return dateVN(dueDate);
   const end = new Date(Date.parse(periodStart) + PAY_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
-  const [, m1, d1] = periodStart.split("-");
-  return `${d1}/${m1} - ${dateVN(end)}`;
+  return `${dateVN(periodStart)} - ${dateVN(end)}`;
 }
 export type Status = "paid" | "partial" | "unpaid" | "overdue";
 /** Trạng thái hóa đơn. `state` là trạng thái chủ trọ đặt tay ("unpaid" = chưa thu, "overdue" = quá hạn); đã thu đủ thì luôn là "paid". */
