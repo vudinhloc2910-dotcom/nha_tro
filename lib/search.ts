@@ -1,5 +1,5 @@
 import { readAll } from "./db";
-import { statusOf, STATUS_LABEL, vnd, monthLabel, type Status } from "./format";
+import { overdueDate, statusOf, STATUS_LABEL, vnd, monthLabel, type Status } from "./format";
 
 export type SearchType = "room" | "tenant" | "resident" | "vehicle" | "invoice" | "issue" | "ledger";
 export const TYPE_LABEL: Record<SearchType, string> = {
@@ -142,7 +142,7 @@ export async function runSearch(p: SearchParams, limit = 100): Promise<SearchRes
     const dEnd = q(r.due_date) || `${q(r.month)}-28`, dStart = q(r.period_start) || dEnd;
     if (p.from || p.to) { if ((p.to && dStart > p.to) || (p.from && dEnd < p.from)) continue; }
     const total = Number(r.total), paid = Number(r.paid);
-    const st = statusOf(total, paid, q(r.due_date), q(r.state));
+    const st = statusOf(total, paid, overdueDate(q(r.period_start), q(r.due_date)), q(r.state));
     if (p.status && st !== p.status) continue;
     if (!okAmount(total)) continue;
     // Gõ "10/2026" hoặc "2026-10" đều khớp tháng

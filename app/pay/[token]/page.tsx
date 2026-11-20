@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSettings, one, readAll } from "@/lib/db";
 import { LogoMark } from "../../logo";
-import { dateVN, monthLabel, payWindowText, statusOf, vnd } from "@/lib/format";
+import { dateVN, monthLabel, overdueDate, payWindowText, statusOf, vnd } from "@/lib/format";
 import { PrintButton } from "../../print-button";
 import { reportIssue } from "../../actions";
 
@@ -26,7 +26,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   const payments = paymentsR as { amount: number; paid_at: string; method: string }[];
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remain = Math.max(0, inv.total - paid);
-  const status = statusOf(inv.total, paid, inv.due_date, inv.state ?? "");
+  const status = statusOf(inv.total, paid, overdueDate(inv.period_start, inv.due_date), inv.state ?? "");
   const note = `Phong ${inv.code}`;
   const invNo = `HD-${inv.month.replace("-", "")}-${inv.code}`;
   const qr = s.bank_account

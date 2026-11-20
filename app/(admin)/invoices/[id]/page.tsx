@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
 import { all, one } from "@/lib/db";
-import { dateVN, payWindowText, monthLabel, statusOf, today, vnd } from "@/lib/format";
+import { dateVN, overdueDate, payWindowText, monthLabel, statusOf, today, vnd } from "@/lib/format";
 import { addExtra, addPayment, deleteExtra, deletePayment, regenerateInvoice, unlockInvoice } from "../../../actions";
 import { Flash, StatusBadge } from "../../../components";
 import { PrintButton } from "../../../print-button";
@@ -27,7 +27,7 @@ export default async function InvoicePage({
   );
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remain = Math.max(0, inv.total - paid);
-  const status = statusOf(inv.total, paid, inv.due_date, inv.state);
+  const status = statusOf(inv.total, paid, overdueDate(inv.period_start, inv.due_date), inv.state);
 
   return (
     <div className="space-y-5">

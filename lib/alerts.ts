@@ -12,11 +12,11 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.p
 export async function loadAlerts() {
   const t0 = today();
   const [invR, tenR, vacR] = await readAll([
-    { sql: `SELECT h.name house, h.id houseId, r.id roomId, r.code, t.name tenant, t.phone, i.total, i.due_date due, i.month, i.token,
+    { sql: `SELECT h.name house, h.id houseId, r.id roomId, r.code, t.name tenant, t.phone, i.total, COALESCE(date(NULLIF(i.period_start,''),'+5 day'), i.due_date) due, i.month, i.token,
               COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i JOIN rooms r ON r.id=i.room_id JOIN houses h ON h.id=r.house_id
             LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1
-            WHERE (i.due_date < ? AND i.state<>'unpaid') OR i.state='overdue'`, args: [t0] },
+            WHERE (COALESCE(date(NULLIF(i.period_start,''),'+5 day'), i.due_date) < ? AND i.state<>'unpaid') OR i.state='overdue'`, args: [t0] },
     { sql: `SELECT h.name house, r.id roomId, r.code, t.name tenant, t.phone, t.contract_end end, t.move_in, t.residence_done residence
             FROM tenants t JOIN rooms r ON r.id=t.room_id JOIN houses h ON h.id=r.house_id WHERE t.active=1`, args: [] },
     { sql: `SELECT h.name house, r.id roomId, r.code, r.rent,

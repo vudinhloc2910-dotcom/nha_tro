@@ -18,7 +18,12 @@ export function payWindowText(periodStart: string | null | undefined, dueDate: s
   const end = new Date(Date.parse(periodStart) + PAY_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
   return `${dateVN(periodStart)} - ${dateVN(end)}`;
 }
-export type Status = "paid" | "partial" | "unpaid" | "overdue";
+/** Ngày bắt đầu coi là "Quá hạn": quá ngày đầu kỳ thu + PAY_WINDOW_DAYS (cùng hạn đóng in trên hóa đơn). Không có ngày đầu kỳ thì dùng hạn cuối kỳ. */
+export function overdueDate(periodStart: string | null | undefined, dueDate: string): string {
+  if (!periodStart || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) return dueDate;
+  return new Date(Date.parse(periodStart) + PAY_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+}
+export type Status ="paid" | "partial" | "unpaid" | "overdue";
 /** Trạng thái hóa đơn. `state` là trạng thái chủ trọ đặt tay ("unpaid" = chưa thu, "overdue" = quá hạn); đã thu đủ thì luôn là "paid". */
 export function statusOf(total: number, paid: number, due: string, state = ""): Status {
   if (paid >= total) return "paid";

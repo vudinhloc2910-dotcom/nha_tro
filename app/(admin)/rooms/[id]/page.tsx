@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
 import { all, readAll } from "@/lib/db";
-import { currentMonth, dateVN, monthLabel, statusOf, vnd } from "@/lib/format";
+import { currentMonth, dateVN, monthLabel, overdueDate, statusOf, vnd } from "@/lib/format";
 import { loadMonth } from "@/lib/monthdata";
 import { addRoomExtra, addRoomService, addVehicle, checkoutTenant, deleteRoom, deleteService, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
 import { computeInvoice, svcUnitLabel } from "@/lib/calc";
@@ -15,7 +15,7 @@ import { accent, btnCls, btnDangerCls, cardCls, inputCls, labelCls, tdCls, thCls
 type Room = { id: number; house_id: number; code: string; rent: number; due_day: number; note: string; floor_label: string; kind: string };
 type Tenant = { name: string; phone: string; people: number; move_in: string; deposit: number; contract_end: string | null; residence_done: number };
 type Vehicle = { id: number; kind: string; plate: string; note: string };
-type Inv = { id: number; month: string; total: number; due_date: string; locked: number; state: string; paid: number };
+type Inv = { id: number; month: string; total: number; due_date: string; period_start: string | null; locked: number; state: string; paid: number };
 type StayRow = { id: number; name: string; phone: string; people: number; move_in: string; move_out: string; deposit: number; active: number; files: number; bills: number; billed: number };
 type Rd = { month: string; elec_old: number; elec_new: number; water_old: number; water_new: number };
 
@@ -34,7 +34,7 @@ export default async function RoomPage({
     { sql: "SELECT * FROM rooms WHERE id=?", args: [rid] },
     { sql: "SELECT * FROM tenants WHERE room_id=? AND active=1", args: [rid] },
     { sql: "SELECT name, move_in, move_out FROM tenants WHERE room_id=? AND active=0 ORDER BY id DESC", args: [rid] },
-    { sql: `SELECT i.id, i.month, i.total, i.due_date, i.locked, i.state, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
+    { sql: `SELECT i.id, i.month, i.total, i.due_date, i.period_start, i.locked, i.state, COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id=i.id),0) paid
             FROM invoices i WHERE i.room_id=? ORDER BY i.month DESC`, args: [rid] },
     { sql: "SELECT id, kind, plate, note FROM vehicles WHERE room_id=? ORDER BY id", args: [rid] },
     { sql: `SELECT f.id, f.kind, f.name, f.mime, f.size, f.created, f.tenant_id, t.name tname FROM room_files f
@@ -312,7 +312,7 @@ async function History({ roomId, invoices, stays }: { roomId: number; invoices: 
                   <td className={tdCls}>{dateVN(i.due_date)}</td>
                   <td className={`${tdCls} text-right`}>{vnd(i.total)}</td>
                   <td className={`${tdCls} text-right`}>{vnd(i.paid)}</td>
-                  <td className={tdCls}><StatusBadge status={statusOf(i.total, i.paid, i.due_date, i.state)} /></td>
+                  <td className={tdCls}><StatusBadge status={statusOf(i.total, i.paid, overdueDate(i.period_start, i.due_date), i.state)} /></td>
                 </tr>
               ))}
             </tbody>

@@ -1,6 +1,6 @@
 import { mergeSettings, readAll, type House } from "./db";
 import { addMonths, type RoomInput, type SvcInput } from "./calc";
-import { prevMonth } from "./format";
+import { overdueDate, prevMonth } from "./format";
 
 export type RoomView = {
   id: number; code: string; rent: number; dueDay: number; note: string;
@@ -117,7 +117,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       tenantId: Number(r.tid), tenantName: r.tname ?? "", phone: r.phone ?? "", tenantPeople: r.people ?? 1,
       prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), svc: svcPrefs },
       input, auto: { debt: debtAuto, periodStart: autoStart, periodEnd: autoEnd },
-      invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: inv.due_date, state: inv.state ?? "", lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
+      invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: overdueDate(inv.period_start, inv.due_date), state: inv.state ?? "", lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
       prevUsage: prev ? { e: Math.max(0, prev.elec_new - prev.elec_old), w: Math.max(0, prev.water_new - prev.water_old) } : null,
       hasReading: !!cur, start: { elec: r.elec_start ?? 0, water: r.water_start ?? 0 },
     });

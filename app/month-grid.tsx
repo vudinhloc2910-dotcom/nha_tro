@@ -395,9 +395,6 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 </td>
               ))}
             </Row>
-            <Row label="Số người" tot={tN(sumBy((r) => num(forms[r.id].people) ?? 0))}>
-              {rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="people" setF={setF} commit={commit} onKey={onKey} />)}
-            </Row>
             <Row label="Điện cũ" tone="elec" tot={tN(sumBy((r) => num(forms[r.id].elecOld) ?? 0))}>{rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="elecOld" setF={setF} commit={commit} onKey={onKey} step="0.1" />)}</Row>
             <Row label="Điện mới" tone="elec" tot={tN(sumBy((r) => num(forms[r.id].elecNew) ?? 0))}>
               {rooms.map((r) => {
@@ -454,6 +451,9 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 </td>
               );
             })}</Row>
+            <Row label="Số người" tot={tN(sumBy((r) => num(forms[r.id].people) ?? 0))}>
+              {rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="people" setF={setF} commit={commit} onKey={onKey} />)}
+            </Row>
             {services.map((s) => (
               <Row key={s.id} tone="svc" label={s.roomId ? `${s.name} (P.${rooms.find((x) => x.id === s.roomId)?.code ?? ""})` : s.name} tot={T(sumBy((r) => lineSum(r, s.name)))}>
                 {rooms.map((r) => {
@@ -470,6 +470,15 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 })}
               </Row>
             ))}
+            <Row label="Tổng dịch vụ" calc tone="svc" tot={T(roomCosts.reduce((a, c) => a + c.svc, 0))}>
+              {rooms.map((r) => <td key={r.id} className={`${cell} text-right text-[15px] font-bold text-violet-900`}>{vnd(roomCosts.find((c) => c.id === r.id)?.svc ?? 0)}</td>)}
+            </Row>
+            <Row label="Tổng dịch vụ + điện, nước" calc tone="total" tot={T(roomCosts.reduce((a, c) => a + c.svc + c.elec + c.water, 0))}>
+              {rooms.map((r) => {
+                const c = roomCosts.find((x) => x.id === r.id);
+                return <td key={r.id} className={`${cell} text-right text-[15px] font-extrabold text-brand-900`}>{vnd(c ? c.svc + c.elec + c.water : 0)}</td>;
+              })}
+            </Row>
             <Row label="Tiền phòng" tone="rent" tot={T(sumBy((r) => num(forms[r.id].rent) ?? 0))}>{rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="rent" setF={setF} commit={commit} onKey={onKey} right />)}</Row>
             <Row label="Phụ phí phát sinh" tot={T(thu.phat_sinh)}>
               {rooms.map((r) => {
