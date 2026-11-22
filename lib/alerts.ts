@@ -17,7 +17,8 @@ export async function loadAlerts() {
             FROM invoices i JOIN rooms r ON r.id=i.room_id JOIN houses h ON h.id=r.house_id
             LEFT JOIN tenants t ON t.room_id=r.id AND t.active=1
             WHERE (COALESCE(date(NULLIF(i.period_start,''),'+5 day'), i.due_date) < ? AND i.state<>'unpaid') OR i.state='overdue'`, args: [t0] },
-    { sql: `SELECT h.name house, r.id roomId, r.code, t.name tenant, t.phone, t.contract_end end, t.move_in, t.residence_done residence
+    { sql: `SELECT h.name house, r.id roomId, r.code, t.name tenant, t.phone, t.contract_end end, t.move_in, t.residence_done residence,
+              (SELECT c.notice_days FROM contracts c WHERE c.tenant_id=t.id AND c.status='active' ORDER BY c.id DESC LIMIT 1) notice
             FROM tenants t JOIN rooms r ON r.id=t.room_id JOIN houses h ON h.id=r.house_id WHERE t.active=1`, args: [] },
     { sql: `SELECT h.name house, r.id roomId, r.code, r.rent,
               (SELECT MAX(x.move_out) FROM tenants x WHERE x.room_id=r.id AND x.active=0) last_out
@@ -37,9 +38,10 @@ export async function loadAlerts() {
   }
   const overdue = [...byRoom.values()].sort((a, b) => b.days - a.days);
 
-  const ten = tenR as { house: string; roomId: number; code: string; tenant: string; phone: string | null; end: string | null; move_in: string | null; residence: number }[];
+  const ten = tenR as { house: string; roomId: number; code: string; tenant: string; phone: string | null; end: string | null; move_in: string | null; residence: number; notice: number | null }[];
   const expiring: ExpiringItem[] = ten
-    .filter((x) => x.end && /^\d{4}-\d{2}-\d{2}$/.test(x.end) && daysBetween(t0, x.end) <= 30)
+    // Nhắc trước số ngày báo trước ghi trong hợp đồng (mặc định 30 ngày)
+    .filter((x) => x.end && /^\d{4}-\d{2}-\d{2}$/.test(x.end) && daysBetween(t0, x.end) <= (x.notice ?? 30))
     .map((x) => ({ house: x.house, roomId: x.roomId, code: x.code, tenant: x.tenant, phone: x.phone ?? "", end: x.end!, daysLeft: daysBetween(t0, x.end!) }))
     .sort((a, b) => a.daysLeft - b.daysLeft);
   const residence: ResidenceItem[] = ten

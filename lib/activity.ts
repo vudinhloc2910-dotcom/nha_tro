@@ -1,6 +1,6 @@
 import { all, run } from "./db";
 
-export type ActKind = "payment" | "invoice" | "checkin" | "checkout" | "remind" | "expense" | "issue";
+export type ActKind = "payment" | "invoice" | "checkin" | "checkout" | "remind" | "expense" | "issue" | "contract";
 export type Act = { id: number; house_id: number; house: string; room_id: number | null; kind: ActKind; text: string; ts: string };
 
 /** Ghi một dòng vào nhật ký hoạt động. Lỗi ghi nhật ký không được làm hỏng việc chính. */

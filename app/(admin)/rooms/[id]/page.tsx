@@ -9,6 +9,7 @@ import { addRoomExtra, addRoomService, addVehicle, checkoutTenant, deleteRoom, d
 import { computeInvoice, svcUnitLabel } from "@/lib/calc";
 import { Flash, StatusBadge } from "../../../components";
 import { RoomEditButton } from "../../../room-editor";
+import { ContractTab } from "./contract-tab";
 import { RoomFiles, type RoomFile } from "../../../room-files";
 import { accent, btnCls, btnDangerCls, cardCls, inputCls, labelCls, tdCls, thCls } from "@/lib/ui";
 
@@ -19,7 +20,7 @@ type Inv = { id: number; month: string; total: number; due_date: string; period_
 type StayRow = { id: number; name: string; phone: string; people: number; move_in: string; move_out: string; deposit: number; active: number; files: number; bills: number; billed: number };
 type Rd = { month: string; elec_old: number; elec_new: number; water_old: number; water_new: number };
 
-const TABS = [["info", "Thông tin chung"], ["price", "Giá và phí"], ["history", "Lịch sử"]] as const;
+const TABS = [["info", "Thông tin chung"], ["contract", "Hợp đồng"], ["price", "Giá và phí"], ["history", "Lịch sử"]] as const;
 
 export default async function RoomPage({
   params, searchParams,
@@ -234,6 +235,8 @@ export default async function RoomPage({
           </section>
         </>
       )}
+
+      {tab === "contract" && <ContractTab roomId={room.id} roomRent={room.rent} hasTenant={!!t} />}
 
       {tab === "history" && <History roomId={room.id} invoices={invoices} stays={stays} />}
     </div>

@@ -13,6 +13,7 @@ import { loadMonth } from "@/lib/monthdata";
 import { logActivity } from "@/lib/activity";
 import { parseImport, runImport } from "@/lib/import-sheet";
 import { today } from "@/lib/format";
+import { closeContractsOnCheckout, syncContractFromTenant } from "@/lib/contracts-db";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const num = (f: FormData, k: string) => {
@@ -118,11 +119,15 @@ export async function saveTenant(f: FormData) {
   const vals = [name, str(f, "phone"), Math.max(1, num(f, "people") || 1), str(f, "move_in"), Math.max(0, num(f, "deposit")), end, f.get("residence_done") ? 1 : 0] as const;
   const cur = await one<{ id: number }>("SELECT id FROM tenants WHERE room_id=? AND active=1", roomId);
   const rinfo = await one<{ house_id: number; code: string }>("SELECT house_id, code FROM rooms WHERE id=?", roomId);
+  let tenantId = cur?.id ?? 0;
   if (cur) await run("UPDATE tenants SET name=?, phone=?, people=?, move_in=?, deposit=?, contract_end=?, residence_done=? WHERE id=?", ...vals, cur.id);
   else {
-    await run("INSERT INTO tenants(name, phone, people, move_in, deposit, contract_end, residence_done, room_id) VALUES (?,?,?,?,?,?,?,?)", ...vals, roomId);
+    const ins = await run("INSERT INTO tenants(name, phone, people, move_in, deposit, contract_end, residence_done, room_id) VALUES (?,?,?,?,?,?,?,?)", ...vals, roomId);
+    tenantId = Number(ins.lastInsertRowid);
     if (rinfo) await logActivity(rinfo.house_id, "checkin", `Phòng ${rinfo.code}: khách mới ${name} vào ở`, roomId);
   }
+  // Giữ hợp đồng khớp với ô "Hợp đồng đến ngày" (cột Hợp đồng và nhắc hết hạn đều dựa vào đây)
+  if (tenantId && end) await syncContractFromTenant(tenantId, roomId, str(f, "move_in"), end, Math.max(0, num(f, "deposit")));
   refresh();
   back(`/rooms/${roomId}`, { ok: "Đã lưu khách thuê" });
 }
@@ -131,6 +136,7 @@ export async function checkoutTenant(f: FormData) {
   const roomId = num(f, "room_id");
   const rinfo = await one<{ house_id: number; code: string }>("SELECT house_id, code FROM rooms WHERE id=?", roomId);
   await run("UPDATE tenants SET active=0, move_out=? WHERE room_id=? AND active=1", today(), roomId);
+  await closeContractsOnCheckout(roomId, today());
   if (rinfo) await logActivity(rinfo.house_id, "checkout", `Phòng ${rinfo.code}: khách trả phòng`, roomId);
   refresh();
   back(`/rooms/${roomId}`, { ok: "Đã trả phòng" });
@@ -821,6 +827,8 @@ export async function deleteRoom(f: FormData) {
     { sql: "DELETE FROM room_prefs WHERE room_id=?", args: [id] },
     { sql: "DELETE FROM vehicles WHERE room_id=?", args: [id] },
     { sql: "DELETE FROM room_files WHERE room_id=?", args: [id] },
+    { sql: "DELETE FROM contract_events WHERE contract_id IN (SELECT id FROM contracts WHERE room_id=?)", args: [id] },
+    { sql: "DELETE FROM contracts WHERE room_id=?", args: [id] },
     { sql: "DELETE FROM tenants WHERE room_id=?", args: [id] },
     { sql: "UPDATE issues SET room_id=NULL WHERE room_id=?", args: [id] },
     { sql: "UPDATE activity SET room_id=NULL WHERE room_id=?", args: [id] },

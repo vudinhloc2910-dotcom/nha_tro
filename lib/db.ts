@@ -125,6 +125,21 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     amount INTEGER NOT NULL, method TEXT DEFAULT 'bank', paid_at TEXT NOT NULL, note TEXT DEFAULT ''
   );
+  CREATE TABLE IF NOT EXISTS contracts(
+    id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, tenant_id INTEGER,
+    start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', handover_date TEXT NOT NULL DEFAULT '',
+    notice_days INTEGER NOT NULL DEFAULT 30, rent INTEGER NOT NULL DEFAULT 0, deposit INTEGER NOT NULL DEFAULT 0,
+    rent_from_start INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '',
+    created TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS contracts_room ON contracts(room_id);
+  CREATE TABLE IF NOT EXISTS contract_events(
+    id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL, event_date TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '',
+    old_end TEXT NOT NULL DEFAULT '', new_end TEXT NOT NULL DEFAULT '', rent_after INTEGER,
+    deposit_returned INTEGER NOT NULL DEFAULT 0, deposit_deducted INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS contract_events_c ON contract_events(contract_id);
 `;
 
 /** Danh sách nhà (địa chỉ do chủ trọ cung cấp). id cố định để chạy lại không bị nhân đôi. */
@@ -158,7 +173,7 @@ export const HOUSE_DEFAULTS: Record<string, string> = {
  * Phiên bản cấu trúc database. Khi thêm bảng/cột mới trong init() thì TĂNG số này, để lần chạy đầu tiên nâng cấp một lần.
  * Các lần sau chỉ tốn 1 truy vấn kiểm tra (thay vì ~25 truy vấn mỗi lần khởi động máy chủ).
  */
-const SCHEMA_VERSION = "16";
+const SCHEMA_VERSION = "17";
 
 async function init() {
   const c = await getClient();
@@ -200,6 +215,12 @@ async function initFull(c: Client) {
   for (const [col, ddl] of [["contract_end", "TEXT DEFAULT ''"], ["residence_done", "INTEGER NOT NULL DEFAULT 0"]] as const) {
     if (!tcols.rows.some((r) => r.name === col)) await c.execute(`ALTER TABLE tenants ADD COLUMN ${col} ${ddl}`);
   }
+  // Hợp đồng: mỗi khách đang ở có ô "Hợp đồng đến ngày" cũ thì tạo một hợp đồng tương ứng (chỉ khi khách đó chưa có hợp đồng)
+  await c.execute(`INSERT INTO contracts(room_id,tenant_id,start_date,end_date,handover_date,notice_days,rent,deposit,status,note,created)
+    SELECT t.room_id, t.id, COALESCE(t.move_in,''), t.contract_end, COALESCE(t.move_in,''), 30, r.rent, COALESCE(t.deposit,0), 'active', '', date('now')
+    FROM tenants t JOIN rooms r ON r.id=t.room_id
+    WHERE t.active=1 AND t.contract_end GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      AND NOT EXISTS (SELECT 1 FROM contracts c WHERE c.tenant_id=t.id)`);
   // Trạng thái đặt tay trên danh sách hóa đơn: '' = tự tính, 'unpaid' = chưa thu, 'overdue' = quá hạn
   if (!cols.rows.some((r) => r.name === "state")) await c.execute("ALTER TABLE invoices ADD COLUMN state TEXT NOT NULL DEFAULT ''");
   // Kỳ hạn thuê của hóa đơn (ngày bắt đầu; ngày kết thúc chính là hạn đóng due_date)

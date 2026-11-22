@@ -22,6 +22,7 @@ const KIND: Record<ActKind, { label: string; cls: string }> = {
   remind: { label: "Nhắc nợ", cls: "bg-amber-100 text-amber-800" },
   expense: { label: "Chi phí", cls: "bg-rose-100 text-rose-800" },
   issue: { label: "Sự cố", cls: "bg-orange-100 text-orange-800" },
+  contract: { label: "Hợp đồng", cls: "bg-indigo-100 text-indigo-800" },
 };
 
 /** Tổng quan các nhà: số liệu tháng, việc cần xử lý (nợ trễ hạn, hợp đồng sắp hết, phòng trống, tạm trú) và nhật ký hoạt động. */
