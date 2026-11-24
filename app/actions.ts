@@ -183,6 +183,80 @@ export async function saveSettings(f: FormData) {
   refresh();
   back("/settings", { ok: "Đã lưu cài đặt. Hóa đơn đã tạo cần bấm 'Tính lại' để áp dụng giá mới." });
 }
+/* ---------- Đồng hồ điện chung của nhà (VD nhà vệ sinh dùng chung một tầng) ---------- */
+/** Lưu cấu hình các đồng hồ chung. parts là chữ dạng "201:2, 202:1" (số phòng:số phần). */
+export async function saveSharedMeterConfig(items: { id: string; name: string; start: string; parts: string }[]): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  try {
+    const house = await currentHouse();
+    const roomRows = await all<{ id: number; code: string }>("SELECT id, code FROM rooms WHERE house_id=?", house.id);
+    const byCode = new Map(roomRows.map((r) => [r.code, Number(r.id)]));
+    const out: { id: string; name: string; start: number; rooms: { roomId: number; parts: number }[] }[] = [];
+    const used = new Set<string>();
+    for (const it of (items ?? []).slice(0, 12)) {
+      const name = String(it.name ?? "").trim().slice(0, 60);
+      if (!name) continue;
+      const startN = Number(String(it.start ?? "").trim().replace(",", ".") || 0);
+      if (!Number.isFinite(startN) || startN < 0) return { ok: false, error: `Số đầu vào của "${name}" phải là số` };
+      const rooms: { roomId: number; parts: number }[] = [];
+      for (const piece of String(it.parts ?? "").split(/[,;\n]/).map((s) => s.trim()).filter(Boolean)) {
+        const m = piece.match(/^(.+?)\s*[:=]\s*([\d.,]+)$/);
+        if (!m) return { ok: false, error: `Phần chia "${piece}" của "${name}" chưa đúng. Viết dạng 201:2, 202:1 (số phòng, dấu hai chấm, số phần)` };
+        const roomId = byCode.get(m[1].trim());
+        const parts = Number(m[2].replace(",", "."));
+        if (!roomId) return { ok: false, error: `Không có phòng "${m[1].trim()}" trong nhà này` };
+        if (!(parts > 0)) return { ok: false, error: `Số phần của phòng ${m[1].trim()} phải lớn hơn 0` };
+        rooms.push({ roomId, parts });
+      }
+      if (rooms.length === 0) return { ok: false, error: `Đồng hồ "${name}" chưa có phòng nào` };
+      let id = /^[a-z0-9_]{1,20}$/.test(String(it.id ?? "")) ? String(it.id) : "";
+      if (!id || used.has(id)) id = `m${Date.now().toString(36)}${out.length}`.slice(0, 20);
+      used.add(id);
+      out.push({ id, name, start: startN, rooms });
+    }
+    await run("INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value", house.id, "shared_meters", JSON.stringify(out));
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Không lưu được" };
+  }
+}
+
+/** Lưu số đồng hồ chung của một tháng rồi tính lại hóa đơn các phòng được chia. */
+export async function saveSharedReadings(houseId: number, month: string, entries: { id: string; old: string; new: string }[]): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  try {
+    if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+    const base = await loadMonth(Number(houseId), month);
+    const st: { sql: string; args: (string | number)[] }[] = [];
+    const H = Number(houseId);
+    const affected = new Set<number>();
+    for (const e of entries ?? []) {
+      const m = base.sharedMeters.find((x) => x.id === e.id);
+      if (!m) continue;
+      const n = toNum(e.new), o = toNum(e.old);
+      if ((n !== null && Number.isNaN(n)) || (o !== null && Number.isNaN(o))) return { ok: false, error: `Số của "${m.name}" phải là số` };
+      const oldV = o ?? m.oldAuto;
+      if (n !== null && n < oldV) return { ok: false, error: `${m.name}: số mới (${n}) nhỏ hơn số cũ (${oldV})` };
+      const del = (key: string) => st.push({ sql: "DELETE FROM house_settings WHERE house_id=? AND key=?", args: [H, key] });
+      const put = (key: string, v: number) => st.push({ sql: "INSERT INTO house_settings(house_id,key,value) VALUES (?,?,?) ON CONFLICT(house_id,key) DO UPDATE SET value=excluded.value", args: [H, key, String(v)] });
+      if (n === null) del(`sm:${m.id}:${month}`); else put(`sm:${m.id}:${month}`, n);
+      if (o === null || o === m.oldAuto) del(`smo:${m.id}:${month}`); else put(`smo:${m.id}:${month}`, o);
+      for (const r of m.rooms) affected.add(r.roomId);
+    }
+    if (st.length) await batch(st);
+    const fresh = await loadMonth(H, month);
+    for (const r of fresh.rooms) {
+      if (!affected.has(r.id) || !(r.hasReading || r.invoice)) continue;
+      await saveInvoice(r, month, { force: true, houseId: H });
+    }
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Không lưu được" };
+  }
+}
+
 export async function saveService(f: FormData) {
   await requireAdmin();
   const id = num(f, "id");

@@ -35,6 +35,7 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Prom
         services={md.services}
         rooms={md.rooms}
         vacant={md.vacant}
+        sharedMeters={md.sharedMeters}
         ledger={ledger}
       />
     </div>

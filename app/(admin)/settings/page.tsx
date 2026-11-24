@@ -4,13 +4,20 @@ import { currentHouse } from "@/lib/house";
 import { addHouse, deleteService, saveService, saveSettings } from "../../actions";
 import { Flash } from "../../components";
 import { btnCls, btnDangerCls, btnGhostCls, cardCls, inputCls, labelCls } from "@/lib/ui";
+import { parseSharedMeters } from "@/lib/shared-meters";
+import { SharedMeterSettings } from "../../shared-meter-settings";
 
 type Svc = { id: number; name: string; type: string; price: number; active: number };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string }> }) {
   const sp = await searchParams;
   const house = await currentHouse();
-  const [s, services] = await Promise.all([getSettings(house.id), all<Svc>("SELECT * FROM services WHERE house_id=? ORDER BY id", house.id)]);
+  const [s, services, roomRows] = await Promise.all([getSettings(house.id), all<Svc>("SELECT * FROM services WHERE house_id=? ORDER BY id", house.id), all<{ id: number; code: string }>("SELECT id, code FROM rooms WHERE house_id=?", house.id)]);
+  const codeOf = new Map(roomRows.map((r) => [Number(r.id), r.code]));
+  const sharedItems = parseSharedMeters(s.shared_meters).map((m) => ({
+    id: m.id, name: m.name, start: String(m.start),
+    parts: m.rooms.filter((r) => codeOf.has(r.roomId)).map((r) => `${codeOf.get(r.roomId)}:${r.parts}`).join(", "),
+  }));
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold">Cài đặt <span className="text-base font-normal text-gray-600">· {house.name}</span></h1>
@@ -80,6 +87,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div><label className={labelCls}>Giá (đ)</label><div className="w-32"><MoneyField name="price" className={`${inputCls}`} /></div></div>
           <button className={btnCls}>Thêm</button>
         </form>
+      </section>
+
+      <section className={cardCls}>
+        <h2 className="mb-1 font-semibold">Đồng hồ điện chung</h2>
+        <p className="mb-3 text-xs text-gray-500">Dùng cho đồng hồ nhiều phòng cùng dùng (VD nhà vệ sinh chung một tầng). Mỗi tháng anh nhập số mới một lần ở trang Hóa đơn tháng, web chia tiền cho các phòng theo số phần rồi cộng vào tiền điện. VD tầng 2: 201 hai phần, 202 một phần thì viết <b>201:2, 202:1</b>. Tính theo giá điện của nhà.</p>
+        <SharedMeterSettings initial={sharedItems} />
       </section>
 
       <section className={cardCls}>

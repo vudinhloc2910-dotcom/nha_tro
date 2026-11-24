@@ -21,6 +21,8 @@ export type RoomInput = {
   elecOld: number; elecNew: number | null; elecPrice: number;
   /** Đồng hồ điện phụ của phòng (null = không có): add = cộng thêm (VD nhà vệ sinh), sub = trừ đi (VD máy bơm). Cùng giá điện với đồng hồ chính. */
   aux?: { name: string; mode: "add" | "sub"; old: number; new: number | null } | null;
+  /** Phần điện từ các đồng hồ chung của cả nhà (VD nhà vệ sinh dùng chung một tầng): mỗi phòng trả parts/total số tiền của đồng hồ, cộng vào tiền điện */
+  shared?: { name: string; old: number; new: number | null; parts: number; total: number }[];
   /** Cách thu nước: meter = theo chỉ số (m³), person = theo người, room = cố định mỗi phòng */
   waterMode: WaterMode; waterOld: number; waterNew: number | null; waterPrice: number;
   services: SvcInput[];
@@ -55,6 +57,14 @@ export function computeInvoice(r: RoomInput): { lines: Line[]; total: number; el
     const signed = r.aux.mode === "sub" ? -money : money;
     elec += signed;
     lines.push({ label: r.aux.mode === "sub" ? `Trừ ${r.aux.name.charAt(0).toLowerCase()}${r.aux.name.slice(1)}` : r.aux.name, detail: `${r.aux.old} → ${r.aux.new} = ${kwh} kWh × ${vnd(r.elecPrice)}`, amount: signed });
+  }
+  // Đồng hồ chung của nhà: phần của phòng = tiền cả đồng hồ × số phần ÷ tổng số phần
+  for (const s of r.shared ?? []) {
+    if (s.new === null || s.new === s.old || s.total <= 0 || s.parts <= 0) continue;
+    const kwh = Math.max(0, s.new - s.old);
+    const money = Math.round((kwh * r.elecPrice * s.parts) / s.total);
+    elec += money;
+    lines.push({ label: s.name, detail: `${kwh} kWh × ${vnd(r.elecPrice)} × ${s.parts}/${s.total} phần`, amount: money });
   }
   let water = 0;
   if (r.waterMode === "person") {

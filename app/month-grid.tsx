@@ -13,7 +13,8 @@ import { MonthExtras, type LiveThu, type RoomCost } from "./month-extras";
 import type { LedgerMonth } from "@/lib/ledgermonth";
 import { computeInvoice, svcAuto, svcUnitLabel, type RoomInput } from "@/lib/calc";
 import { statusOf, vnd, type Status } from "@/lib/format";
-import type { RoomView } from "@/lib/monthdata";
+import type { RoomView, SharedMeterView } from "@/lib/monthdata";
+import { SharedMeterBox } from "./shared-meter-box";
 
 type Svc = { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null };
 type Form = {
@@ -83,8 +84,9 @@ const labelCell = "sticky left-0 z-10 w-28 min-w-[7rem] border-b border-gray-100
 const inpT = "w-full rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[13px] text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 const inp = "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 
-export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, ledger }: {
+export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, ledger, sharedMeters }: {
   month: string; houseId: number; houseName: string; /** Cách thu nước chung của nhà (mỗi phòng có thể đặt riêng, xem room.input.waterMode) */ waterMode?: "meter" | "person"; services: Svc[]; rooms: RoomView[]; vacant: string[]; ledger: LedgerMonth;
+  /** Đồng hồ điện chung của nhà (nhà vệ sinh...) */ sharedMeters?: SharedMeterView[];
 }) {
   const router = useRouter();
   const [forms, setForms] = useState<Record<number, Form>>(() => Object.fromEntries(rooms.map((r) => [r.id, initForm(r)])));
@@ -267,6 +269,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
           <ul className="mt-1 list-disc pl-5">{errList.map((e) => <li key={e.code}>Phòng {e.code}: {e.msg}</li>)}</ul>
         </div>
       )}
+      {sharedMeters && sharedMeters.length > 0 && <SharedMeterBox key={JSON.stringify(sharedMeters)} month={month} houseId={houseId} meters={sharedMeters} elecPrice={rooms[0]?.input.elecPrice ?? 0} />}
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <button type="button" disabled={applying} onClick={() => void applyDueDays()} className="rounded-lg border border-brand-300 bg-white px-3 py-1.5 font-medium text-brand-800 shadow-sm hover:bg-brand-50 disabled:opacity-60">{applying ? "Đang áp dụng…" : "Đặt kỳ thu cả tháng theo ngày đóng tiền của từng phòng"}</button>
         <span className="text-gray-500">Dùng khi nhiều phòng bị lệch ngày (VD cùng nhảy về 15). Ngày đóng tiền sửa ở nút Sửa của từng phòng.</span>
@@ -513,6 +516,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
                   {has ? <div className="text-[15px] font-bold leading-tight text-amber-900">{vnd(c.elec)}</div> : <div className="text-sm text-amber-700/50">—</div>}
                   <div className="text-[10.5px] leading-tight text-amber-800/70">{has ? `${Math.round(used * 10) / 10} kWh × ${fmtMoney(r.input.elecPrice)}` : "chưa nhập số mới"}</div>
                   {ax && auxMoney > 0 && <div className="text-[10.5px] font-medium leading-tight text-amber-900">{ax.mode === "sub" ? "−" : "+"} {vnd(auxMoney)} {ax.name.toLowerCase()}</div>}
+                  {c.lines.filter((l) => l.detail.includes("phần")).map((l) => <div key={l.label} className="text-[10.5px] font-medium leading-tight text-amber-900">+ {vnd(l.amount)} {l.label.toLowerCase()}</div>)}
                 </td>
               );
             })}</Row>

@@ -1,6 +1,10 @@
 import { mergeSettings, readAll, type House } from "./db";
 import { addMonths, isWaterMode, type RoomInput, type SvcInput, type WaterMode } from "./calc";
 import { overdueDate, prevMonth } from "./format";
+import { parseSharedMeters, sharedNew, sharedOld, sharedOldAuto } from "./shared-meters";
+
+/** Một đồng hồ điện chung của nhà trong một tháng (để hiện ô nhập số ở bảng Hóa đơn tháng) */
+export type SharedMeterView = { id: string; name: string; old: number; oldAuto: number; new: number | null; rooms: { roomId: number; code: string; parts: number }[] };
 
 export type RoomView = {
   id: number; code: string; rent: number; dueDay: number; note: string;
@@ -28,6 +32,7 @@ export type MonthData = {
   houseId: number; month: string; settings: Record<string, string>;
   services: { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null }[];
   rooms: RoomView[]; vacant: string[];
+  sharedMeters: SharedMeterView[];
 };
 
 type KV = { room_id: number; key: string; value: string };
@@ -63,7 +68,13 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
   const rooms = roomRows as { id: number; code: string; rent: number; due_day: number; note: string | null; elec_start: number; water_start: number; tid: number | null; tname: string | null; phone: string | null; people: number | null }[];
   const occupied = rooms.filter((r) => r.tid !== null);
   const vacant = rooms.filter((r) => r.tid === null).map((r) => r.code);
-  const out: MonthData = { houseId, month, settings, services, rooms: [], vacant };
+  const sharedCfg = parseSharedMeters(settings.shared_meters);
+  const codeOf = new Map(rooms.map((x) => [Number(x.id), x.code]));
+  const sharedMeters: SharedMeterView[] = sharedCfg.map((m) => ({
+    id: m.id, name: m.name, old: sharedOld(settings, m, month), oldAuto: sharedOldAuto(settings, m, month), new: sharedNew(settings, m.id, month),
+    rooms: m.rooms.filter((x) => codeOf.has(x.roomId)).map((x) => ({ roomId: x.roomId, code: codeOf.get(x.roomId)!, parts: x.parts })),
+  }));
+  const out: MonthData = { houseId, month, settings, services, rooms: [], vacant, sharedMeters };
   if (occupied.length === 0) return out;
 
   const prefs = prefs0 as unknown as KV[];
@@ -121,6 +132,10 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       elecOld: cur?.elec_old ?? prev?.elec_new ?? r.elec_start ?? 0, elecNew: cur ? cur.elec_new : null,
       elecPrice: num(pf.get("elec_price")) ?? ePrice,
       aux: auxPref ? { name: auxPref.name, mode: auxPref.mode, old: num(mo.get("aux_old")) ?? auxOldAuto, new: num(mo.get("aux_new")) } : null,
+      shared: sharedMeters.flatMap((m) => {
+        const mine = m.rooms.find((x) => x.roomId === r.id);
+        return mine ? [{ name: m.name, old: m.old, new: m.new, parts: mine.parts, total: m.rooms.reduce((a, x) => a + x.parts, 0) }] : [];
+      }),
       waterMode, waterOld: cur?.water_old ?? prev?.water_new ?? r.water_start ?? 0, waterNew: cur ? cur.water_new : null,
       waterPrice: num(pf.get("water_price")) ?? wPrice,
       services: svcInputs,
