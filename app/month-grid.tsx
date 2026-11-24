@@ -12,7 +12,7 @@ import { RoomEditor } from "./room-editor";
 import { MonthExtras, type LiveThu, type RoomCost } from "./month-extras";
 import type { LedgerMonth } from "@/lib/ledgermonth";
 import { computeInvoice, svcAuto, svcUnitLabel, type RoomInput } from "@/lib/calc";
-import { statusOf, vnd } from "@/lib/format";
+import { statusOf, vnd, type Status } from "@/lib/format";
 import type { RoomView } from "@/lib/monthdata";
 
 type Svc = { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null };
@@ -54,6 +54,25 @@ function buildInput(r: RoomView, f: Form): RoomInput {
     periodStart: f.periodStart, periodEnd: f.periodEnd,
   };
 }
+
+/** Màu cả cột phòng theo trạng thái thu tiền (Chưa thu giữ nguyên, không tô). */
+const COL_STYLE: Partial<Record<Status, { head: string; bar: string; tint: string; edge: string; glow: string; card: string }>> = {
+  paid: {
+    head: "linear-gradient(180deg,#a7f3d0 0%,#d1fae5 55%,#ecfdf5 100%)", bar: "#059669", glow: "0 6px 14px -8px rgba(5,150,105,.55)",
+    tint: "linear-gradient(180deg,rgba(16,185,129,.12) 0%,rgba(16,185,129,.045) 100%)", edge: "rgba(5,150,105,.32)",
+    card: "linear-gradient(135deg,#ecfdf5 0%,#ffffff 60%)",
+  },
+  overdue: {
+    head: "linear-gradient(180deg,#fecdd3 0%,#ffe4e6 55%,#fff1f2 100%)", bar: "#e11d48", glow: "0 7px 16px -7px rgba(225,29,72,.6)",
+    tint: "linear-gradient(180deg,rgba(244,63,94,.12) 0%,rgba(244,63,94,.045) 100%)", edge: "rgba(225,29,72,.36)",
+    card: "linear-gradient(135deg,#fff1f2 0%,#ffffff 60%)",
+  },
+  partial: {
+    head: "linear-gradient(180deg,#fde68a 0%,#fef3c7 55%,#fffbeb 100%)", bar: "#d97706", glow: "0 6px 14px -8px rgba(217,119,6,.5)",
+    tint: "linear-gradient(180deg,rgba(245,158,11,.12) 0%,rgba(245,158,11,.045) 100%)", edge: "rgba(217,119,6,.32)",
+    card: "linear-gradient(135deg,#fffbeb 0%,#ffffff 60%)",
+  },
+};
 
 const cell = "border-b border-gray-100 px-1 py-0.5 align-top";
 const labelCell = "sticky left-0 z-10 w-28 min-w-[7rem] border-b border-gray-100 px-1.5 py-1 text-[11px] font-semibold uppercase leading-tight";
@@ -221,6 +240,12 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
   const scope = tab === "water" ? meterRooms : rooms;
   const filled = scope.filter((r) => num(forms[r.id][tab === "water" ? "waterNew" : "elecNew"]) !== null).length;
   const scopeN = Math.max(1, scope.length);
+  // Tô màu cả cột phòng theo trạng thái: cột thứ i của bảng = phần tử con thứ i+2 của mỗi hàng (cột đầu là nhãn hàng)
+  const colCss = rooms.map((r, i) => {
+    const inv = invs[r.id];
+    const c = inv ? COL_STYLE[statusOf(inv.total, inv.paid, inv.due, inv.state ?? "")] : undefined;
+    return c ? `.mg-grid tbody td:nth-child(${i + 2}){background-image:${c.tint};box-shadow:inset 1px 0 0 ${c.edge},inset -1px 0 0 ${c.edge}}` : "";
+  }).join("");
 
   if (rooms.length === 0) return <p className="text-sm text-gray-600">Nhà này chưa có phòng nào có khách thuê. Thêm phòng và khách ở mục Phòng, hoặc nhập dữ liệu cũ ở Khác → Nhập dữ liệu sheet.</p>;
 
@@ -282,7 +307,8 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
           const stt = status[r.id];
           const setExtras = (extras: Form["extras"], save = false) => { latest.current = { ...latest.current, [r.id]: { ...latest.current[r.id], extras } }; setF(r.id, { extras }); if (save) setTimeout(() => commit(r.id), 0); };
           return (
-            <div key={r.id} className={`rounded-2xl border bg-white p-3 shadow-sm ${st === "overdue" ? "border-red-300" : "border-stone-200"}`}>
+            <div key={r.id} className={`rounded-2xl border bg-white p-3 shadow-sm ${st === "overdue" ? "border-red-300" : "border-stone-200"}`}
+              style={st && COL_STYLE[st] ? { backgroundImage: COL_STYLE[st]!.card, borderLeft: `5px solid ${COL_STYLE[st]!.bar}` } : undefined}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><span className="text-lg font-bold">Phòng {r.code}</span>{st && <StatusBadge status={st} />}</div>
@@ -372,15 +398,18 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
       </div>
 
       <div data-nav-scope className="hidden max-h-[calc(100vh-8rem)] overflow-auto rounded-2xl border border-stone-200 bg-white shadow-sm md:block">
-        <table className="w-full border-collapse text-sm tabular-nums">
+        <style>{colCss}</style>
+        <table className="mg-grid w-full border-collapse text-sm tabular-nums">
           <thead>
             <tr>
               <th className="sticky left-0 top-0 z-30 w-28 min-w-[7rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] font-semibold uppercase leading-tight text-gray-600">{houseName}</th>
               {rooms.map((r) => {
                 const inv = invs[r.id];
                 const st = inv ? statusOf(inv.total, inv.paid, inv.due, inv.state ?? "") : null;
+                const cs = st ? COL_STYLE[st] : undefined;
                 return (
-                  <th key={r.id} className="sticky top-0 z-20 min-w-[8.75rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-left align-top shadow-[0_1px_0_0_#e5e7eb]">
+                  <th key={r.id} className="sticky top-0 z-20 min-w-[8.75rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-left align-top shadow-[0_1px_0_0_#e5e7eb]"
+                    style={cs ? { backgroundImage: cs.head, boxShadow: `inset 0 4px 0 ${cs.bar}, ${cs.glow}` } : undefined}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-bold">Phòng {r.code}</span>
                       <button type="button" onClick={() => setEditing(r)} className="rounded border border-brand-300 bg-white px-1.5 text-[11px] font-medium leading-5 text-brand-800 hover:bg-brand-50">Sửa</button>
