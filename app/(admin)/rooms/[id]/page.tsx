@@ -1,4 +1,4 @@
-import { MoneyField, fmtMoney } from "../../../money-field";
+import { MoneyField } from "../../../money-field";
 import Link from "next/link";
 import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
@@ -204,7 +204,7 @@ export default async function RoomPage({
                               <option value="person">Theo người</option>
                               <option value="room">Theo phòng</option>
                             </select>
-                            <div className="w-32"><MoneyField name="water_price" defaultValue={view.prefs.waterPrice ?? ""} placeholder={fmtMoney(md.settings.water_price)} className={`${inputCls} py-1 text-xs`} /></div>
+                            <div className="w-32"><MoneyField name="water_price" defaultValue={view.prefs.waterPrice ?? ""} placeholder={new Intl.NumberFormat("vi-VN").format(Number(md.settings.water_price) || 0)} className={`${inputCls} py-1 text-xs`} /></div>
                             <button className={`${btnCls} py-1 text-xs`}>Lưu</button>
                           </form>
                           <div className="mt-1 text-[11px] text-gray-400">Đơn giá để trống = dùng giá chung của nhà. Đơn vị: đ/{WATER_UNIT[view.input.waterMode]}.</div>
