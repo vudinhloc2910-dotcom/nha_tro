@@ -13,12 +13,14 @@ const td = "border-b border-gray-100 px-2 py-1.5 align-middle";
 const num = (s: string) => { const n = Number(String(s).trim().replace(",", ".")); return Number.isFinite(n) ? n : 0; };
 
 /** Ô nhập tiền: hiện dấu chấm ngăn nghìn và đơn vị "đ" (giống cột Tổng thu), bên trong vẫn lưu dạng số thường. */
-function MoneyInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  const digits = value.replace(/[^\d]/g, "");
-  const shown = digits ? Number(digits).toLocaleString("vi-VN") : "";
+function MoneyInput({ value, onChange, placeholder, allowNegative }: { value: string; onChange: (v: string) => void; placeholder?: string; allowNegative?: boolean }) {
+  // allowNegative: gõ dấu "-" ở đầu để nhập số âm (hoàn tiền, được trừ). Bên trong lưu "-500000".
+  const split = (s: string) => ({ neg: !!allowNegative && s.trim().startsWith("-"), digits: s.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "") });
+  const { neg, digits } = split(value);
+  const shown = (neg ? "-" : "") + (digits ? Number(digits).toLocaleString("vi-VN") : "");
   return (
     <div className="relative">
-      <input inputMode="numeric" value={shown} placeholder={placeholder ?? "0"} onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))} className={`${inp} pr-6 text-right`} />
+      <input inputMode={allowNegative ? "text" : "numeric"} value={shown} placeholder={placeholder ?? "0"} onChange={(e) => { const r = split(e.target.value); onChange((r.neg ? "-" : "") + r.digits); }} className={`${inp} pr-6 text-right`} />
       <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-gray-500">đ</span>
     </div>
   );
@@ -115,7 +117,7 @@ export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; 
                     </td>
                     <td className={td}><input className={inp} value={it.name} placeholder="VD: Sửa điều hòa 202" onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} /></td>
                     <td className={td}><input className={`${inp} text-right`} type="number" min="0" inputMode="decimal" value={it.qty} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} /></td>
-                    <td className={td}><MoneyInput value={it.unit} onChange={(v) => setItems(items.map((x, j) => (j === i ? { ...x, unit: v } : x)))} /></td>
+                    <td className={td}><MoneyInput allowNegative value={it.unit} onChange={(v) => setItems(items.map((x, j) => (j === i ? { ...x, unit: v } : x)))} /></td>
                     <td className={`${td} text-right font-medium`}>{vnd(itemTotal(it))}</td>
                     <td className={td}><input className={inp} value={it.note} placeholder="(nếu cần)" onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} /></td>
                     <td className={td}><button type="button" aria-label="Xóa dòng" onClick={() => setItems(items.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600">✕</button></td>
@@ -181,7 +183,7 @@ export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; 
                   <td className={td}>
                     {r.k === "tien_phong" && rentFixed
                       ? <div className="text-right">{vnd(ledger.rentMonthly)}<div className="text-[11px] text-gray-400">chia đều theo tháng (Cài đặt)</div></div>
-                      : <MoneyInput value={chi[r.k]} onChange={(v) => setChi({ ...chi, [r.k]: v })} />}
+                      : <MoneyInput allowNegative value={chi[r.k]} onChange={(v) => setChi({ ...chi, [r.k]: v })} />}
                   </td>
                   <td className={`${td} text-right ${r.thu - r.chi < 0 ? "text-red-700" : ""}`}>{vnd(r.thu - r.chi)}</td>
                 </tr>
@@ -252,7 +254,7 @@ export function MonthExtras({ month, thu, ledger, roomCosts }: { month: string; 
                   {llExtras.map((r, i) => (
                     <div key={i} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
                       <input className={inp} value={r.name} placeholder="Nội dung (VD: sửa vòi nước)" onChange={(e) => setLlExtras(llExtras.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-                      <MoneyInput value={r.amount} onChange={(v) => setLlExtras(llExtras.map((x, j) => (j === i ? { ...x, amount: v } : x)))} />
+                      <MoneyInput allowNegative value={r.amount} onChange={(v) => setLlExtras(llExtras.map((x, j) => (j === i ? { ...x, amount: v } : x)))} />
                       <button type="button" aria-label="Xóa dòng" onClick={() => setLlExtras(llExtras.filter((_, j) => j !== i))} className="px-1 text-gray-400 hover:text-red-600">✕</button>
                     </div>
                   ))}

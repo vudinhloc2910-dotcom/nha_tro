@@ -50,7 +50,7 @@ function buildInput(r: RoomView, f: Form, waterMode: "meter" | "person"): RoomIn
     waterMode, waterOld: num(f.waterOld) ?? 0, waterNew: num(f.waterNew), waterPrice: r.input.waterPrice,
     services: r.input.services.map((s) => ({ ...s, amount: num(f.svc[s.id] ?? "") })),
     extras: f.extras.map((e) => ({ name: e.name.trim(), amount: num(e.amount) ?? 0 })).filter((e) => e.name && e.amount),
-    discount: Math.abs(num(f.discount) ?? 0), debt: num(f.debt) ?? 0,
+    discount: num(f.discount) ?? 0, debt: num(f.debt) ?? 0,
     periodStart: f.periodStart, periodEnd: f.periodEnd,
   };
 }
@@ -193,7 +193,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
       if (l.label === "Nợ kỳ trước") continue;
       if (l.label === "Tiền điện") thu.dien += l.amount;
       else if (l.label === "Tiền nước") thu.nuoc += l.amount;
-      else if (l.label === "Tiền thuê phòng" || l.label === "Tiền phòng" || l.label.startsWith("Giảm")) thu.tien_phong += l.amount;
+      else if (l.label === "Tiền thuê phòng" || l.label === "Tiền phòng" || l.label.startsWith("Giảm") || l.label === "Tính thêm") thu.tien_phong += l.amount;
       else if (l.detail === "Phụ phí phát sinh") thu.phat_sinh += l.amount;
       else if (/wifi|mạng|internet/i.test(l.label)) thu.mang += l.amount;
       else thu.dich_vu += l.amount;
@@ -207,7 +207,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
     for (const l of ls) {
       if (l.label === "Tiền điện") elec += l.amount;
       else if (l.label === "Tiền nước") water += l.amount;
-      else if (l.label === "Nợ kỳ trước" || l.label === "Tiền thuê phòng" || l.label === "Tiền phòng" || l.label.startsWith("Giảm") || l.detail === "Phụ phí phát sinh") continue;
+      else if (l.label === "Nợ kỳ trước" || l.label === "Tiền thuê phòng" || l.label === "Tiền phòng" || l.label.startsWith("Giảm") || l.label === "Tính thêm" || l.detail === "Phụ phí phát sinh") continue;
       else svc += l.amount;
     }
     return { id: r.id, code: r.code, tenant: r.tenantName, elec, water, svc };
@@ -311,7 +311,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                     <label className="block text-xs text-gray-600">Kỳ từ<DateVN keepOnEmpty data-room={r.id} value={f.periodStart} onChange={(v) => setF(r.id, { periodStart: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                     <label className="block text-xs text-gray-600">Kỳ đến<DateVN keepOnEmpty data-room={r.id} value={f.periodEnd} onChange={(v) => setF(r.id, { periodEnd: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                     <label className="block text-xs text-gray-600">Số người<input type="number" min="1" inputMode="numeric" data-room={r.id} value={f.people} onChange={(e) => setF(r.id, { people: e.target.value })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
-                    <label className="block text-xs text-gray-600">Tiền phòng<MoneyField data-room={r.id} value={f.rent} onChange={(v) => setF(r.id, { rent: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
+                    <label className="block text-xs text-gray-600">Tiền phòng<MoneyField allowNegative data-room={r.id} value={f.rent} onChange={(v) => setF(r.id, { rent: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                   </div>
                   {services.map((s) => {
                     const sv = r.input.services.find((x) => x.id === s.id)!;
@@ -338,8 +338,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block text-xs text-gray-600">Giảm giá<MoneyField data-room={r.id} value={f.discount} placeholder="0" onChange={(v) => setF(r.id, { discount: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
-                    <label className="block text-xs text-gray-600">Nợ cũ{r.auto.debt > 0 ? ` (kỳ trước ${vnd(r.auto.debt)})` : ""}<MoneyField data-room={r.id} value={f.debt} placeholder="0" onChange={(v) => setF(r.id, { debt: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
+                    <label className="block text-xs text-gray-600">Giảm giá<MoneyField allowNegative data-room={r.id} value={f.discount} placeholder="0" onChange={(v) => setF(r.id, { discount: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
+                    <label className="block text-xs text-gray-600">Nợ cũ{r.auto.debt > 0 ? ` (kỳ trước ${vnd(r.auto.debt)})` : ""}<MoneyField allowNegative data-room={r.id} value={f.debt} placeholder="0" onChange={(v) => setF(r.id, { debt: v })} onBlur={() => commit(r.id)} className={`${inp} mt-1`} /></label>
                   </div>
                 </div>
               </details>
@@ -500,11 +500,11 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 );
               })}
             </Row>
-            <Row label="Giảm giá" tot={T(sumBy((r) => Math.abs(num(forms[r.id].discount) ?? 0)))}>{rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="discount" setF={setF} commit={commit} onKey={onKey} right placeholder="0" />)}</Row>
+            <Row label="Giảm giá" tot={T(sumBy((r) => num(forms[r.id].discount) ?? 0))}>{rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="discount" setF={setF} commit={commit} onKey={onKey} right placeholder="0" />)}</Row>
             <Row label="Nợ cũ" tot={T(sumBy((r) => num(forms[r.id].debt) ?? 0))}>
               {rooms.map((r) => (
                 <td key={r.id} className={cell}>
-                  <MoneyField data-room={r.id} value={forms[r.id].debt} placeholder="0" onChange={(v) => setF(r.id, { debt: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={inpT} />
+                  <MoneyField allowNegative data-room={r.id} value={forms[r.id].debt} placeholder="0" onChange={(v) => setF(r.id, { debt: v })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={inpT} />
                   {r.auto.debt > 0 && <div className="mt-0.5 text-right text-[10px] leading-tight text-gray-400">kỳ trước còn {vnd(r.auto.debt)}</div>}
                 </td>
               ))}
@@ -592,7 +592,7 @@ function Num({ r, f, k, setF, commit, onKey, step, right, placeholder }: {
   if (k === "rent" || k === "discount") {
     return (
       <td className={cell}>
-        <MoneyField data-room={r.id} value={f[k]} placeholder={placeholder} onChange={(v) => setF(r.id, { [k]: v } as Partial<Form>)} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={inpT} />
+        <MoneyField allowNegative data-room={r.id} value={f[k]} placeholder={placeholder} onChange={(v) => setF(r.id, { [k]: v } as Partial<Form>)} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={inpT} />
       </td>
     );
   }

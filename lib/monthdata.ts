@@ -108,7 +108,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
       waterPrice: num(pf.get("water_price")) ?? wPrice,
       services: svcInputs,
       extras: by(extrasT, r.id).map((x) => ({ name: x.name, amount: x.amount })),
-      discount: Math.abs(num(mo.get("discount")) ?? 0),
+      discount: num(mo.get("discount")) ?? 0,
       debt: Math.round(num(mo.get("debt")) ?? debtAuto),
       periodStart, periodEnd,
     };

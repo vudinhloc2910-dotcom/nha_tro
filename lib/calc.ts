@@ -57,7 +57,8 @@ export function computeInvoice(r: RoomInput): { lines: Line[]; total: number; el
     else lines.push({ label: s.name, detail: "", amount });
   }
   for (const e of r.extras) lines.push({ label: e.name, detail: "Phụ phí phát sinh", amount: e.amount });
-  if (r.discount) lines.push({ label: "Giảm giá", detail: "", amount: -Math.abs(r.discount) });
+  // Giảm giá: số dương = giảm; số âm = tính thêm vào hóa đơn
+  if (r.discount) lines.push({ label: r.discount > 0 ? "Giảm giá" : "Tính thêm", detail: "", amount: -r.discount });
   if (r.debt) lines.push({ label: "Nợ kỳ trước", detail: "", amount: r.debt });
 
   return { lines, total: lines.reduce((a, l) => a + l.amount, 0), elec, water };

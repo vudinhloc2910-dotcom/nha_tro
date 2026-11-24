@@ -375,11 +375,11 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
     const people = toNum(inp.people);
     setMonth("people", people === null ? null : String(Math.max(1, Math.round(people))), String(base.tenantPeople));
     const rent = toNum(inp.rent);
-    setMonth("rent", rent === null ? null : String(Math.max(0, Math.round(rent))), String(base.rent));
+    setMonth("rent", rent === null ? null : String(Math.round(rent)), String(base.rent));
     const debt = toNum(inp.debt);
-    setMonth("debt", debt === null ? null : String(Math.max(0, Math.round(debt))), String(base.auto.debt));
+    setMonth("debt", debt === null ? null : String(Math.round(debt)), String(base.auto.debt));
     const discount = toNum(inp.discount);
-    setMonth("discount", discount === null || discount === 0 ? null : String(Math.abs(Math.round(discount))), null);
+    setMonth("discount", discount === null || discount === 0 ? null : String(Math.round(discount)), null);
     // Kỳ thu luôn lưu đúng ngày chủ trọ nhập, kể cả khi trùng ngày tự tính (trước đây trùng thì bị xóa và web quay về ngày cũ của hóa đơn, nên cứ "nhảy về 15")
     const up = "INSERT INTO room_month(room_id,month,key,value) VALUES (?,?,?,?) ON CONFLICT(room_id,month,key) DO UPDATE SET value=excluded.value";
     if (inp.periodStart) st.push({ sql: up, args: [R, M, "p_start", inp.periodStart] }); // ngày trống: giữ nguyên kỳ thu đã lưu
@@ -641,7 +641,8 @@ export async function saveChiCategories(month: string, chi: Partial<Record<"dien
     const n = toNum(chi[k]);
     if (n !== null && Number.isNaN(n)) return { ok: false, error: "Số tiền chi phải là số" };
     st.push({ sql: "DELETE FROM ledger WHERE house_id=? AND month=? AND kind='chi' AND category=?", args: [h.id, month, k] });
-    if (n && n > 0) st.push({ sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source) VALUES (?,?,'chi',?,?,?,'manual')", args: [h.id, month, k, names[k], Math.round(n)] });
+    // Số âm (hoàn tiền, được trừ) cũng được lưu; chỉ bỏ qua số 0
+    if (n && Math.round(n) !== 0) st.push({ sql: "INSERT INTO ledger(house_id,month,kind,category,name,amount,source) VALUES (?,?,'chi',?,?,?,'manual')", args: [h.id, month, k, names[k], Math.round(n)] });
   }
   await batch(st);
   return { ok: true };
