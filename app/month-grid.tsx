@@ -43,11 +43,11 @@ function initForm(r: RoomView): Form {
   };
 }
 
-function buildInput(r: RoomView, f: Form, waterMode: "meter" | "person"): RoomInput {
+function buildInput(r: RoomView, f: Form): RoomInput {
   return {
     people: Math.max(1, Math.round(num(f.people) ?? 1)), vehicles: r.input.vehicles, rent: num(f.rent) ?? 0,
     elecOld: num(f.elecOld) ?? 0, elecNew: num(f.elecNew), elecPrice: r.input.elecPrice,
-    waterMode, waterOld: num(f.waterOld) ?? 0, waterNew: num(f.waterNew), waterPrice: r.input.waterPrice,
+    waterMode: r.input.waterMode, waterOld: num(f.waterOld) ?? 0, waterNew: num(f.waterNew), waterPrice: r.input.waterPrice,
     services: r.input.services.map((s) => ({ ...s, amount: num(f.svc[s.id] ?? "") })),
     extras: f.extras.map((e) => ({ name: e.name.trim(), amount: num(e.amount) ?? 0 })).filter((e) => e.name && e.amount),
     discount: num(f.discount) ?? 0, debt: num(f.debt) ?? 0,
@@ -60,8 +60,8 @@ const labelCell = "sticky left-0 z-10 w-28 min-w-[7rem] border-b border-gray-100
 const inpT = "w-full rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[13px] text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 const inp = "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 
-export function MonthGrid({ month, houseId, houseName, waterMode, services, rooms, vacant, ledger }: {
-  month: string; houseId: number; houseName: string; waterMode: "meter" | "person"; services: Svc[]; rooms: RoomView[]; vacant: string[]; ledger: LedgerMonth;
+export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, ledger }: {
+  month: string; houseId: number; houseName: string; /** Cách thu nước chung của nhà (mỗi phòng có thể đặt riêng, xem room.input.waterMode) */ waterMode?: "meter" | "person"; services: Svc[]; rooms: RoomView[]; vacant: string[]; ledger: LedgerMonth;
 }) {
   const router = useRouter();
   const [forms, setForms] = useState<Record<number, Form>>(() => Object.fromEntries(rooms.map((r) => [r.id, initForm(r)])));
@@ -165,8 +165,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
 
   // Tính tiền và so sánh "đã sửa chưa" MỘT LẦN cho mỗi phòng sau mỗi lần gõ (trước đây tính lại hàng trăm lần mỗi lần gõ)
   const calcMap = useMemo(
-    () => Object.fromEntries(rooms.map((r) => [r.id, computeInvoice(buildInput(r, forms[r.id], waterMode))])),
-    [rooms, forms, waterMode]
+    () => Object.fromEntries(rooms.map((r) => [r.id, computeInvoice(buildInput(r, forms[r.id]))])),
+    [rooms, forms]
   );
   const dirtyMap: Record<number, boolean> = {};
   for (const r of rooms) dirtyMap[r.id] = JSON.stringify(forms[r.id]) !== saved.current[r.id];
@@ -215,7 +215,12 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
   const T = (v: number) => vnd(v);
   const tN = (v: number) => (Math.round(v * 10) / 10).toLocaleString("vi-VN");
 
-  const filled = rooms.filter((r) => num(forms[r.id][tab === "water" && waterMode === "meter" ? "waterNew" : "elecNew"]) !== null).length;
+  // Nước chỉ nhập chỉ số ở phòng thu theo chỉ số; phòng thu theo người hoặc theo phòng không có ô nhập nước
+  const meterRooms = rooms.filter((r) => r.input.waterMode === "meter");
+  const anyMeter = meterRooms.length > 0;
+  const scope = tab === "water" ? meterRooms : rooms;
+  const filled = scope.filter((r) => num(forms[r.id][tab === "water" ? "waterNew" : "elecNew"]) !== null).length;
+  const scopeN = Math.max(1, scope.length);
 
   if (rooms.length === 0) return <p className="text-sm text-gray-600">Nhà này chưa có phòng nào có khách thuê. Thêm phòng và khách ở mục Phòng, hoặc nhập dữ liệu cũ ở Khác → Nhập dữ liệu sheet.</p>;
 
@@ -246,16 +251,16 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
       <div className="space-y-3 md:hidden">
         <div className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
           <div className="mb-2 flex gap-2">
-            {([["elec", "Điện"], ...(waterMode === "meter" ? [["water", "Nước"]] : [])] as [string, string][]).map(([k, l]) => (
+            {([["elec", "Điện"], ...(anyMeter ? [["water", "Nước"]] : [])] as [string, string][]).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setTab(k as "elec" | "water")}
                 className={`flex-1 rounded-xl py-2.5 text-sm font-semibold ${tab === k ? "bg-brand-600 text-white" : "bg-brand-50 text-brand-800"}`}>{l}</button>
             ))}
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="font-medium">Đã ghi {tab === "water" ? "nước" : "điện"} {filled}/{rooms.length} phòng</span>
-            <span className="text-gray-500">{Math.round((filled / rooms.length) * 100)}%</span>
+            <span className="font-medium">Đã ghi {tab === "water" ? "nước" : "điện"} {filled}/{scope.length} phòng</span>
+            <span className="text-gray-500">{Math.round((filled / scopeN) * 100)}%</span>
           </div>
-          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-teal-400 transition-all" style={{ width: `${(filled / rooms.length) * 100}%` }} /></div>
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-teal-400 transition-all" style={{ width: `${(filled / scopeN) * 100}%` }} /></div>
         </div>
 
         {rooms.map((r) => {
@@ -265,7 +270,8 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
           const c = calc(r);
           const total = inv && !dirty(r) ? inv.total : c.total;
           const remain = Math.max(0, total - (inv?.paid ?? 0));
-          const isW = tab === "water" && waterMode === "meter";
+          const isW = tab === "water";
+          const noMeter = isW && r.input.waterMode !== "meter"; // phòng này không tính nước theo chỉ số
           const oldK = isW ? "waterOld" : "elecOld", newK = isW ? "waterNew" : "elecNew";
           const o = num(f[oldK]) ?? 0, n = num(f[newK]);
           const used = n === null ? null : n - o;
@@ -285,6 +291,11 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 <button type="button" onClick={() => setEditing(r)} className="shrink-0 rounded-xl border border-brand-300 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-800">Sửa</button>
               </div>
 
+              {noMeter ? (
+                <div className="mt-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
+                  Phòng này tính nước <b>{r.input.waterMode === "person" ? "theo người" : "theo phòng"}</b>: {vnd(c.water)} (không cần nhập số nước).
+                </div>
+              ) : (<>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <label className="block text-xs text-gray-600">{isW ? "Nước cũ" : "Điện cũ"}
                   <input type="number" step="0.1" min="0" inputMode="decimal" data-room={r.id} value={f[oldK]} onChange={(e) => setF(r.id, { [oldK]: e.target.value } as Partial<Form>)} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} mt-1 py-2.5 bg-gray-50`} />
@@ -298,6 +309,7 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 <span className="text-gray-600">{used !== null && used >= 0 ? `Dùng ${Math.round(used * 10) / 10} ${isW ? "m³" : "kWh"} = ` : ""}{used !== null && used >= 0 ? <b>{vnd(isW ? c.water : c.elec)}</b> : <span className="text-gray-400">chưa nhập số mới</span>}</span>
                 {warn && <span className={`text-xs ${used! < 0 ? "text-red-700" : "text-amber-700"}`}>⚠ {warn}</span>}
               </div>
+              </>)}
 
               <div className="mt-3 flex items-end justify-between rounded-xl bg-brand-50 px-3 py-2.5">
                 <div><div className="text-xs text-gray-600">Tổng cần nộp</div><div className="text-xl font-extrabold">{vnd(total)}</div></div>
@@ -421,11 +433,12 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
                 </td>
               );
             })}</Row>
-            {waterMode === "meter" ? (
+            {anyMeter ? (
               <>
-                <Row label="Nước cũ" tone="water" tot={tN(sumBy((r) => num(forms[r.id].waterOld) ?? 0))}>{rooms.map((r) => <Num key={r.id} r={r} f={forms[r.id]} k="waterOld" setF={setF} commit={commit} onKey={onKey} step="0.1" />)}</Row>
-                <Row label="Nước mới" tone="water" tot={tN(sumBy((r) => num(forms[r.id].waterNew) ?? 0))}>
+                <Row label="Nước cũ" tone="water" tot={tN(sumBy((r) => (r.input.waterMode === "meter" ? num(forms[r.id].waterOld) ?? 0 : 0)))}>{rooms.map((r) => r.input.waterMode === "meter" ? <Num key={r.id} r={r} f={forms[r.id]} k="waterOld" setF={setF} commit={commit} onKey={onKey} step="0.1" /> : <td key={r.id} className={`${cell} text-center text-[11px] text-sky-800/60`}>{r.input.waterMode === "person" ? "theo người" : "theo phòng"}</td>)}</Row>
+                <Row label="Nước mới" tone="water" tot={tN(sumBy((r) => (r.input.waterMode === "meter" ? num(forms[r.id].waterNew) ?? 0 : 0)))}>
                   {rooms.map((r) => {
+                    if (r.input.waterMode !== "meter") return <td key={r.id} className={`${cell} text-center text-[11px] text-sky-800/60`}>—</td>;
                     const f = forms[r.id];
                     const o = num(f.waterOld) ?? 0, n = num(f.waterNew);
                     const used = n === null ? null : n - o;
@@ -441,13 +454,14 @@ export function MonthGrid({ month, houseId, houseName, waterMode, services, room
             ) : null}
             <Row label="Tiền nước" calc tone="water" tot={T(thu.nuoc)}>{rooms.map((r) => {
               const f = forms[r.id]; const c = calc(r);
-              const meter = waterMode === "meter";
+              const mode = r.input.waterMode;
+              const meter = mode === "meter";
               const has = !meter || num(f.waterNew) !== null;
-              const used = meter ? Math.max(0, (num(f.waterNew) ?? 0) - (num(f.waterOld) ?? 0)) : Math.max(1, Math.round(num(f.people) ?? 1));
+              const used = meter ? Math.max(0, (num(f.waterNew) ?? 0) - (num(f.waterOld) ?? 0)) : mode === "room" ? 1 : Math.max(1, Math.round(num(f.people) ?? 1));
               return (
                 <td key={r.id} className={`${cell} text-right`}>
                   {has ? <div className="text-[15px] font-bold leading-tight text-sky-900">{vnd(c.water)}</div> : <div className="text-sm text-sky-700/50">—</div>}
-                  <div className="text-[10.5px] leading-tight text-sky-800/70">{has ? `${Math.round(used * 10) / 10} ${meter ? "m³" : "người"} × ${fmtMoney(r.input.waterPrice)}` : "chưa nhập số mới"}</div>
+                  <div className="text-[10.5px] leading-tight text-sky-800/70">{!has ? "chưa nhập số mới" : mode === "room" ? "thu theo phòng" : `${Math.round(used * 10) / 10} ${meter ? "m³" : "người"} × ${fmtMoney(r.input.waterPrice)}`}</div>
                 </td>
               );
             })}</Row>

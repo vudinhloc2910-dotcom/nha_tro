@@ -8,7 +8,7 @@ import { setSelectedMonth } from "@/lib/month";
 import { all, batch, one, run } from "@/lib/db";
 import { currentHouse, setCurrentHouse } from "@/lib/house";
 import { generateInvoice, generateMonth, saveInvoice } from "@/lib/billing";
-import { addMonths } from "@/lib/calc";
+import { addMonths, isWaterMode } from "@/lib/calc";
 import { loadMonth } from "@/lib/monthdata";
 import { logActivity } from "@/lib/activity";
 import { parseImport, runImport } from "@/lib/import-sheet";
@@ -109,6 +109,29 @@ export async function saveRoom(f: FormData) {
   await run("UPDATE rooms SET code=?, floor_label=?, kind=?, rent=?, due_day=?, note=? WHERE id=?", code, str(f, "floor_label").slice(0, 40), str(f, "kind").slice(0, 40), Math.max(0, num(f, "rent")), due, str(f, "note"), id);
   refresh();
   back(`/rooms/${id}`, { ok: "Đã lưu phòng" });
+}
+/** Cách thu nước và đơn giá nước riêng của một phòng (tab Giá và phí). "default" = theo cài đặt chung của nhà. */
+export async function saveRoomWater(f: FormData) {
+  await requireAdmin();
+  const roomId = num(f, "room_id");
+  const house = await currentHouse();
+  const room = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", roomId, house.id);
+  if (!room) back("/rooms", { err: "Không tìm thấy phòng" });
+  const mode = str(f, "water_mode");
+  if (mode !== "default" && !isWaterMode(mode)) back(`/rooms/${roomId}`, { tab: "price", err: "Cách tính nước không hợp lệ" });
+  const priceRaw = str(f, "water_price");
+  const price = priceRaw === "" ? null : Math.round(num(f, "water_price"));
+  if (price !== null && price < 0) back(`/rooms/${roomId}`, { tab: "price", err: "Đơn giá nước không được âm" });
+  await batch([
+    mode === "default"
+      ? { sql: "DELETE FROM room_prefs WHERE room_id=? AND key='water_mode'", args: [roomId] }
+      : { sql: "INSERT INTO room_prefs(room_id,key,value) VALUES (?,?,?) ON CONFLICT(room_id,key) DO UPDATE SET value=excluded.value", args: [roomId, "water_mode", mode] },
+    price === null
+      ? { sql: "DELETE FROM room_prefs WHERE room_id=? AND key='water_price'", args: [roomId] }
+      : { sql: "INSERT INTO room_prefs(room_id,key,value) VALUES (?,?,?) ON CONFLICT(room_id,key) DO UPDATE SET value=excluded.value", args: [roomId, "water_price", String(price)] },
+  ]);
+  refresh();
+  back(`/rooms/${roomId}`, { tab: "price", ok: "Đã lưu cách tính nước của phòng. Hóa đơn tháng đã lưu sẽ tính lại khi anh sửa một ô của phòng này trong lưới." });
 }
 export async function saveTenant(f: FormData) {
   await requireAdmin();

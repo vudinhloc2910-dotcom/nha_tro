@@ -5,6 +5,11 @@
  */
 import { vnd } from "./format";
 
+export type WaterMode = "meter" | "person" | "room";
+export const WATER_MODE_LABEL: Record<WaterMode, string> = { meter: "Theo chỉ số (m³)", person: "Theo người", room: "Theo phòng" };
+export const WATER_UNIT: Record<WaterMode, string> = { meter: "m³", person: "người", room: "phòng" };
+export const isWaterMode = (v: unknown): v is WaterMode => v === "meter" || v === "person" || v === "room";
+
 export type SvcInput = {
   id: number; name: string; type: "room" | "person" | "vehicle";
   unit: number; // đơn giá đang áp dụng cho phòng này (giá riêng của phòng nếu có, không thì giá chung của nhà)
@@ -14,7 +19,8 @@ export type SvcInput = {
 export type RoomInput = {
   people: number; vehicles: number; rent: number;
   elecOld: number; elecNew: number | null; elecPrice: number;
-  waterMode: "meter" | "person"; waterOld: number; waterNew: number | null; waterPrice: number;
+  /** Cách thu nước: meter = theo chỉ số (m³), person = theo người, room = cố định mỗi phòng */
+  waterMode: WaterMode; waterOld: number; waterNew: number | null; waterPrice: number;
   services: SvcInput[];
   extras: { name: string; amount: number }[];
   discount: number; // giảm giá (số dương = giảm bớt)
@@ -44,6 +50,9 @@ export function computeInvoice(r: RoomInput): { lines: Line[]; total: number; el
   if (r.waterMode === "person") {
     water = r.people * r.waterPrice;
     lines.push({ label: "Tiền nước", detail: `${r.people} người × ${vnd(r.waterPrice)}`, amount: water });
+  } else if (r.waterMode === "room") {
+    water = r.waterPrice;
+    lines.push({ label: "Tiền nước", detail: "Thu theo phòng", amount: water });
   } else if (r.waterNew !== null && r.waterNew !== r.waterOld) {
     const m3 = Math.max(0, r.waterNew - r.waterOld);
     water = Math.round(m3 * r.waterPrice);

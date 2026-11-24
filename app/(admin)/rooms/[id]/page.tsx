@@ -1,12 +1,12 @@
-import { MoneyField } from "../../../money-field";
+import { MoneyField, fmtMoney } from "../../../money-field";
 import Link from "next/link";
 import { DateVN } from "../../../date-input";
 import { notFound } from "next/navigation";
 import { all, readAll } from "@/lib/db";
 import { currentMonth, dateVN, monthLabel, overdueDate, statusOf, vnd } from "@/lib/format";
 import { loadMonth } from "@/lib/monthdata";
-import { addRoomExtra, addRoomService, addVehicle, checkoutTenant, deleteRoom, deleteService, deleteVehicle, saveRoom, saveTenant } from "../../../actions";
-import { computeInvoice, svcUnitLabel } from "@/lib/calc";
+import { addRoomExtra, addRoomService, addVehicle, checkoutTenant, deleteRoom, deleteService, deleteVehicle, saveRoom, saveRoomWater, saveTenant } from "../../../actions";
+import { WATER_UNIT, computeInvoice, svcUnitLabel } from "@/lib/calc";
 import { Flash, StatusBadge } from "../../../components";
 import { RoomEditButton } from "../../../room-editor";
 import { ContractTab } from "./contract-tab";
@@ -193,7 +193,26 @@ export default async function RoomPage({
                     <tbody className="divide-y divide-gray-100">
                       <tr><td className={tdCls}>Tiền thuê phòng</td><td className={`${tdCls} text-xs text-gray-500`}>mỗi tháng</td><td className={`${tdCls} text-right`}>{vnd(room.rent)}</td><td className={`${tdCls} text-right font-medium`}>{vnd(room.rent)}</td><td className={`${tdCls} text-xs`}><Tag /></td></tr>
                       <tr><td className={tdCls}>Điện<div className="text-xs text-gray-400">Số đầu vào: {view.start.elec}</div></td><td className={`${tdCls} text-xs text-gray-500`}>theo số kWh</td><td className={`${tdCls} text-right`}>{vnd(view.input.elecPrice)}/kWh</td><td className={`${tdCls} text-right text-gray-400`}>theo chỉ số</td><td className={`${tdCls} text-xs`}>{view.prefs.elecPrice !== null ? <Tag own /> : <Tag />}</td></tr>
-                      <tr><td className={tdCls}>Nước<div className="text-xs text-gray-400">Số đầu vào: {view.start.water}</div></td><td className={`${tdCls} text-xs text-gray-500`}>{view.input.waterMode === "person" ? "theo người" : "theo m³"}</td><td className={`${tdCls} text-right`}>{vnd(view.input.waterPrice)}/{view.input.waterMode === "person" ? "người" : "m³"}</td><td className={`${tdCls} text-right ${view.input.waterMode === "person" ? "font-medium" : "text-gray-400"}`}>{view.input.waterMode === "person" ? vnd(svcAmt("Tiền nước")) : "theo chỉ số"}</td><td className={`${tdCls} text-xs`}>{view.prefs.waterPrice !== null ? <Tag own /> : <Tag />}</td></tr>
+                      <tr>
+                        <td className={tdCls}>Nước{view.input.waterMode === "meter" && <div className="text-xs text-gray-400">Số đầu vào: {view.start.water}</div>}</td>
+                        <td className={tdCls}>
+                          <form action={saveRoomWater} className="flex flex-wrap items-center gap-2">
+                            <input type="hidden" name="room_id" value={room.id} />
+                            <select name="water_mode" defaultValue={view.prefs.waterMode ?? "default"} aria-label="Cách thu nước" className={`${inputCls} !w-auto py-1 text-xs`}>
+                              <option value="default">Theo mặc định của nhà ({md.settings.water_mode === "person" ? "theo người" : "theo chỉ số"})</option>
+                              <option value="meter">Theo chỉ số (m³)</option>
+                              <option value="person">Theo người</option>
+                              <option value="room">Theo phòng</option>
+                            </select>
+                            <div className="w-32"><MoneyField name="water_price" defaultValue={view.prefs.waterPrice ?? ""} placeholder={fmtMoney(md.settings.water_price)} className={`${inputCls} py-1 text-xs`} /></div>
+                            <button className={`${btnCls} py-1 text-xs`}>Lưu</button>
+                          </form>
+                          <div className="mt-1 text-[11px] text-gray-400">Đơn giá để trống = dùng giá chung của nhà. Đơn vị: đ/{WATER_UNIT[view.input.waterMode]}.</div>
+                        </td>
+                        <td className={`${tdCls} text-right`}>{vnd(view.input.waterPrice)}/{WATER_UNIT[view.input.waterMode]}</td>
+                        <td className={`${tdCls} text-right ${view.input.waterMode === "meter" ? "text-gray-400" : "font-medium"}`}>{view.input.waterMode === "meter" ? "theo chỉ số" : vnd(svcAmt("Tiền nước"))}</td>
+                        <td className={`${tdCls} text-xs`}>{view.prefs.waterPrice !== null || view.prefs.waterMode !== null ? <Tag own /> : <Tag />}</td>
+                      </tr>
                       {mine.map((s) => {
                         const p = view.prefs.svc[s.id];
                         const off = !!p?.off;

@@ -1,5 +1,5 @@
 import { mergeSettings, readAll, type House } from "./db";
-import { addMonths, type RoomInput, type SvcInput } from "./calc";
+import { addMonths, isWaterMode, type RoomInput, type SvcInput, type WaterMode } from "./calc";
 import { overdueDate, prevMonth } from "./format";
 
 export type RoomView = {
@@ -8,7 +8,7 @@ export type RoomView = {
   monthNote: string;
   tenantId: number; tenantName: string; phone: string; tenantPeople: number;
   /** Giá riêng của phòng (null = dùng giá chung của nhà) */
-  prefs: { elecPrice: number | null; waterPrice: number | null; svc: Record<number, { unit: number | null; off: boolean }> };
+  prefs: { elecPrice: number | null; waterPrice: number | null; /** Cách thu nước riêng của phòng (null = theo cài đặt chung của nhà) */ waterMode: WaterMode | null; svc: Record<number, { unit: number | null; off: boolean }> };
   input: RoomInput;
   /** Giá trị tự động (để hiện làm gợi ý khi chủ trọ chưa đặt tay) */
   auto: { debt: number; periodStart: string; periodEnd: string };
@@ -70,7 +70,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
 
   const by = <T extends { room_id: number }>(list: T[], id: number) => list.filter((x) => x.room_id === id);
   const ePrice = Number(settings.elec_price) || 0, wPrice = Number(settings.water_price) || 0;
-  const waterMode: "meter" | "person" = settings.water_mode === "person" ? "person" : "meter";
+  const houseWaterMode: WaterMode = settings.water_mode === "person" ? "person" : "meter";
   const pad = (n: number) => String(n).padStart(2, "0");
 
   for (const r of occupied) {
@@ -100,6 +100,8 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     const periodEnd = mo.get("p_end") || inv?.due_date || autoEnd;
     const periodStart = mo.get("p_start") || inv?.period_start || (inv ? addMonths(periodEnd, -1) : autoStart);
 
+    const roomWaterMode = isWaterMode(pf.get("water_mode")) ? (pf.get("water_mode") as WaterMode) : null;
+    const waterMode: WaterMode = roomWaterMode ?? houseWaterMode;
     const input: RoomInput = {
       people, vehicles: vehCount.get(r.id) ?? 0, rent: Math.round(num(mo.get("rent")) ?? r.rent),
       elecOld: cur?.elec_old ?? prev?.elec_new ?? r.elec_start ?? 0, elecNew: cur ? cur.elec_new : null,
@@ -115,7 +117,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     out.rooms.push({
       id: r.id, code: r.code, rent: r.rent, dueDay: r.due_day, note: r.note ?? "", monthNote: mo.get("note") ?? "",
       tenantId: Number(r.tid), tenantName: r.tname ?? "", phone: r.phone ?? "", tenantPeople: r.people ?? 1,
-      prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), svc: svcPrefs },
+      prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), waterMode: roomWaterMode, svc: svcPrefs },
       input, auto: { debt: debtAuto, periodStart: autoStart, periodEnd: autoEnd },
       invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: overdueDate(inv.period_start, inv.due_date), state: inv.state ?? "", lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
       prevUsage: prev ? { e: Math.max(0, prev.elec_new - prev.elec_old), w: Math.max(0, prev.water_new - prev.water_old) } : null,

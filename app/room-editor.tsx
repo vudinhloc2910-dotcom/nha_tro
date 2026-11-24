@@ -5,6 +5,7 @@ import { useState } from "react";
 import { saveRoomProfile } from "./actions";
 import { MoneyField, fmtMoney } from "./money-field";
 import type { RoomView } from "@/lib/monthdata";
+import { WATER_UNIT } from "@/lib/calc";
 
 type Svc = { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null };
 const s2 = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
@@ -72,7 +73,7 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
         <p className="mb-2 text-xs text-gray-500">Để trống = dùng giá chung của nhà.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className={L}>Giá điện (đ/kWh)</label><MoneyField className={inp} value={f.elecPrice} placeholder={fmtMoney(room.input.elecPrice)} onChange={(v) => set("elecPrice", v)} /></div>
-          <div><label className={L}>Giá nước ({room.input.waterMode === "person" ? "đ/người" : "đ/m³"})</label><MoneyField className={inp} value={f.waterPrice} placeholder={fmtMoney(room.input.waterPrice)} onChange={(v) => set("waterPrice", v)} /></div>
+          <div><label className={L}>Giá nước (đ/{WATER_UNIT[room.input.waterMode]}; đổi cách thu nước ở tab Giá và phí)</label><MoneyField className={inp} value={f.waterPrice} placeholder={fmtMoney(room.input.waterPrice)} onChange={(v) => set("waterPrice", v)} /></div>
         </div>
 
         <h3 className="mb-1 mt-5 text-sm font-semibold">Giá dịch vụ của phòng</h3>
