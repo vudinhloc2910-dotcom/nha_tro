@@ -29,6 +29,7 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
     code: room.code, tenantName: room.tenantName, phone: room.phone, people: String(room.tenantPeople), rent: String(room.rent),
     dueDay: String(room.dueDay), note: room.note, elecPrice: s2(room.prefs.elecPrice), waterPrice: s2(room.prefs.waterPrice),
     elecStart: String(room.start.elec), waterStart: String(room.start.water),
+    auxOn: room.prefs.aux ? "1" : "", auxName: room.prefs.aux?.name ?? "", auxMode: room.prefs.aux?.mode ?? "add", auxStart: room.prefs.aux ? String(room.prefs.aux.start) : "",
   });
   const [svc, setSvc] = useState<Record<number, { unit: string; off: boolean }>>(() =>
     Object.fromEntries(services.map((s) => [s.id, { unit: s2(room.prefs.svc[s.id]?.unit), off: !!room.prefs.svc[s.id]?.off }]))
@@ -40,7 +41,8 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
 
   async function save() {
     setBusy(true); setErr("");
-    const res = await saveRoomProfile({ roomId: room.id, month, ...f, svc: Object.fromEntries(Object.entries(svc).map(([k, v]) => [k, v])), newSvc });
+    const { auxOn, ...rest } = f;
+    const res = await saveRoomProfile({ roomId: room.id, month, ...rest, auxOn: auxOn === "1", svc: Object.fromEntries(Object.entries(svc).map(([k, v]) => [k, v])), newSvc });
     setBusy(false);
     if (res.ok) onSaved(); else setErr(res.error);
   }
@@ -68,6 +70,22 @@ export function RoomEditor({ room, month, services, onClose, onSaved }: { room: 
           <div><label className={L}>Số điện đầu vào</label><input className={inp} type="number" min="0" step="0.1" value={f.elecStart} onChange={(e) => set("elecStart", e.target.value)} /></div>
           <div><label className={L}>Số nước đầu vào</label><input className={inp} type="number" min="0" step="0.1" value={f.waterStart} onChange={(e) => set("waterStart", e.target.value)} /></div>
         </div>
+
+        <h3 className="mb-1 mt-5 text-sm font-semibold">Đồng hồ điện phụ</h3>
+        <p className="mb-2 text-xs text-gray-500">Dùng khi phòng còn dính thêm một đồng hồ điện khác: <b>cộng thêm</b> vào hóa đơn (VD nhà vệ sinh) hoặc <b>trừ đi</b> khỏi tiền điện của phòng (VD máy bơm). Tính cùng giá điện của nhà. Mỗi tháng nhập số cũ, số mới ngay trong bảng Hóa đơn tháng.</p>
+        <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={f.auxOn === "1"} onChange={(e) => set("auxOn", e.target.checked ? "1" : "")} />Phòng này có đồng hồ điện phụ</label>
+        {f.auxOn === "1" && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div><label className={L}>Tên đồng hồ</label><input className={inp} value={f.auxName} placeholder={f.auxMode === "sub" ? "Điện máy bơm" : "Điện nhà vệ sinh"} onChange={(e) => set("auxName", e.target.value)} /></div>
+            <div><label className={L}>Cách tính</label>
+              <select className={inp} value={f.auxMode} onChange={(e) => set("auxMode", e.target.value)}>
+                <option value="add">Cộng thêm vào hóa đơn</option>
+                <option value="sub">Trừ vào tiền điện</option>
+              </select>
+            </div>
+            <div><label className={L}>Số đầu vào (số cũ tháng đầu)</label><input className={inp} type="number" min="0" step="0.1" value={f.auxStart} onChange={(e) => set("auxStart", e.target.value)} /></div>
+          </div>
+        )}
 
         <h3 className="mb-1 mt-5 text-sm font-semibold">Đơn giá riêng của phòng</h3>
         <p className="mb-2 text-xs text-gray-500">Để trống = dùng giá chung của nhà.</p>

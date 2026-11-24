@@ -8,7 +8,13 @@ export type RoomView = {
   monthNote: string;
   tenantId: number; tenantName: string; phone: string; tenantPeople: number;
   /** Giá riêng của phòng (null = dùng giá chung của nhà) */
-  prefs: { elecPrice: number | null; waterPrice: number | null; /** Cách thu nước riêng của phòng (null = theo cài đặt chung của nhà) */ waterMode: WaterMode | null; svc: Record<number, { unit: number | null; off: boolean }> };
+  prefs: {
+    elecPrice: number | null; waterPrice: number | null; /** Cách thu nước riêng của phòng (null = theo cài đặt chung của nhà) */ waterMode: WaterMode | null; svc: Record<number, { unit: number | null; off: boolean }>;
+    /** Đồng hồ điện phụ (null = phòng không có) */
+    aux: { name: string; mode: "add" | "sub"; start: number } | null;
+  };
+  /** Số cũ tự động của đồng hồ phụ (số mới tháng trước, hoặc số đầu vào) */
+  auxOldAuto: number;
   input: RoomInput;
   /** Giá trị tự động (để hiện làm gợi ý khi chủ trọ chưa đặt tay) */
   auto: { debt: number; periodStart: string; periodEnd: string };
@@ -30,7 +36,7 @@ type KV = { room_id: number; key: string; value: string };
 export async function loadMonth(houseId: number, month: string): Promise<MonthData> {
   const pm = prevMonth(month);
   // TẤT CẢ truy vấn đọc của tháng được gửi trong MỘT lượt gọi database (nhanh hơn nhiều so với gọi lần lượt)
-  const [h, kv, svc, roomRows, prefs0, rm0, readings, extras, invoices, invLines0, prevInv, vehR] = await readAll([
+  const [h, kv, svc, roomRows, prefs0, rm0, readings, extras, invoices, invLines0, prevInv, vehR, pmAux0] = await readAll([
     { sql: "SELECT id, name, address FROM houses WHERE id=?", args: [houseId] },
     { sql: "SELECT key, value FROM house_settings WHERE house_id=?", args: [houseId] },
     { sql: "SELECT id, name, type, price, room_id roomId FROM services WHERE house_id=? AND active=1 ORDER BY id", args: [houseId] },
@@ -49,6 +55,7 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
             FROM invoices i JOIN rooms r ON r.id=i.room_id
             WHERE r.house_id=? AND i.month=(SELECT MAX(month) FROM invoices WHERE room_id=i.room_id AND month<?)`, args: [houseId, month] },
     { sql: "SELECT v.room_id, COUNT(*) c FROM vehicles v JOIN rooms r ON r.id=v.room_id WHERE r.house_id=? GROUP BY v.room_id", args: [houseId] },
+    { sql: "SELECT m.room_id, m.key, m.value FROM room_month m JOIN rooms r ON r.id=m.room_id WHERE m.month=? AND m.key='aux_new' AND r.house_id=?", args: [pm, houseId] },
   ]);
   const settings = mergeSettings(h[0] as House | undefined, kv as { key: string; value: string }[]);
   const services = svc as { id: number; name: string; type: "room" | "person" | "vehicle"; price: number; roomId: number | null }[];
@@ -100,12 +107,20 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     const periodEnd = mo.get("p_end") || inv?.due_date || autoEnd;
     const periodStart = mo.get("p_start") || inv?.period_start || (inv ? addMonths(periodEnd, -1) : autoStart);
 
+    // Đồng hồ điện phụ (nhà vệ sinh cộng thêm, máy bơm trừ đi...): bật bằng room_prefs aux_on; số liệu tháng lưu ở room_month aux_old/aux_new
+    const auxPref = pf.get("aux_on") === "1"
+      ? { name: (pf.get("aux_name") || "Điện đồng hồ phụ").slice(0, 60), mode: (pf.get("aux_mode") === "sub" ? "sub" : "add") as "add" | "sub", start: num(pf.get("aux_start")) ?? 0 }
+      : null;
+    const prevAuxNew = num(by(pmAux0 as unknown as KV[], r.id)[0]?.value);
+    const auxOldAuto = prevAuxNew ?? auxPref?.start ?? 0;
+
     const roomWaterMode = isWaterMode(pf.get("water_mode")) ? (pf.get("water_mode") as WaterMode) : null;
     const waterMode: WaterMode = roomWaterMode ?? houseWaterMode;
     const input: RoomInput = {
       people, vehicles: vehCount.get(r.id) ?? 0, rent: Math.round(num(mo.get("rent")) ?? r.rent),
       elecOld: cur?.elec_old ?? prev?.elec_new ?? r.elec_start ?? 0, elecNew: cur ? cur.elec_new : null,
       elecPrice: num(pf.get("elec_price")) ?? ePrice,
+      aux: auxPref ? { name: auxPref.name, mode: auxPref.mode, old: num(mo.get("aux_old")) ?? auxOldAuto, new: num(mo.get("aux_new")) } : null,
       waterMode, waterOld: cur?.water_old ?? prev?.water_new ?? r.water_start ?? 0, waterNew: cur ? cur.water_new : null,
       waterPrice: num(pf.get("water_price")) ?? wPrice,
       services: svcInputs,
@@ -117,7 +132,8 @@ export async function loadMonth(houseId: number, month: string): Promise<MonthDa
     out.rooms.push({
       id: r.id, code: r.code, rent: r.rent, dueDay: r.due_day, note: r.note ?? "", monthNote: mo.get("note") ?? "",
       tenantId: Number(r.tid), tenantName: r.tname ?? "", phone: r.phone ?? "", tenantPeople: r.people ?? 1,
-      prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), waterMode: roomWaterMode, svc: svcPrefs },
+      prefs: { elecPrice: num(pf.get("elec_price")), waterPrice: num(pf.get("water_price")), waterMode: roomWaterMode, svc: svcPrefs, aux: auxPref },
+      auxOldAuto,
       input, auto: { debt: debtAuto, periodStart: autoStart, periodEnd: autoEnd },
       invoice: inv ? { id: inv.id, token: inv.token, total: inv.total, paid: inv.paid, locked: !!inv.locked, due: overdueDate(inv.period_start, inv.due_date), state: inv.state ?? "", lines: invLines.filter((l) => l.invoice_id === inv.id).map((l) => ({ label: l.label, detail: l.detail, amount: l.amount })) } : null,
       prevUsage: prev ? { e: Math.max(0, prev.elec_new - prev.elec_old), w: Math.max(0, prev.water_new - prev.water_old) } : null,

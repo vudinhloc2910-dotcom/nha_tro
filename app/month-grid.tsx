@@ -19,6 +19,8 @@ type Svc = { id: number; name: string; type: "room" | "person" | "vehicle"; pric
 type Form = {
   periodStart: string; periodEnd: string; people: string; rent: string;
   elecOld: string; elecNew: string; waterOld: string; waterNew: string;
+  /** Đồng hồ điện phụ (chỉ phòng đã bật mới dùng) */
+  auxOld: string; auxNew: string;
   svc: Record<number, string>; extras: { name: string; amount: string }[]; discount: string; debt: string;
 };
 type Inv = { id: number; token: string; total: number; paid: number; due: string; locked: boolean; state?: string; lines?: { label: string; detail: string; amount: number }[] } | null;
@@ -37,6 +39,7 @@ function initForm(r: RoomView): Form {
   return {
     periodStart: i.periodStart, periodEnd: i.periodEnd, people: String(i.people), rent: String(i.rent),
     elecOld: String(i.elecOld), elecNew: s2(i.elecNew), waterOld: String(i.waterOld), waterNew: s2(i.waterNew),
+    auxOld: i.aux ? String(i.aux.old) : "", auxNew: i.aux ? s2(i.aux.new) : "",
     svc: Object.fromEntries(i.services.map((s) => [s.id, s2(s.amount)])),
     extras: i.extras.map((e) => ({ name: e.name, amount: String(e.amount) })),
     discount: i.discount ? String(i.discount) : "", debt: i.debt ? String(i.debt) : "",
@@ -47,6 +50,7 @@ function buildInput(r: RoomView, f: Form): RoomInput {
   return {
     people: Math.max(1, Math.round(num(f.people) ?? 1)), vehicles: r.input.vehicles, rent: num(f.rent) ?? 0,
     elecOld: num(f.elecOld) ?? 0, elecNew: num(f.elecNew), elecPrice: r.input.elecPrice,
+    aux: r.input.aux ? { ...r.input.aux, old: num(f.auxOld) ?? r.auxOldAuto, new: num(f.auxNew) } : null,
     waterMode: r.input.waterMode, waterOld: num(f.waterOld) ?? 0, waterNew: num(f.waterNew), waterPrice: r.input.waterPrice,
     services: r.input.services.map((s) => ({ ...s, amount: num(f.svc[s.id] ?? "") })),
     extras: f.extras.map((e) => ({ name: e.name.trim(), amount: num(e.amount) ?? 0 })).filter((e) => e.name && e.amount),
@@ -134,7 +138,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
     setSt(id, { state: "saving", msg: "Đang lưu…" });
     const payload: RoomMonthInput = {
       roomId: id, houseId, month, people: f.people, rent: f.rent, periodStart: f.periodStart, periodEnd: f.periodEnd,
-      elecOld: f.elecOld, elecNew: f.elecNew, waterOld: f.waterOld, waterNew: f.waterNew,
+      elecOld: f.elecOld, elecNew: f.elecNew, waterOld: f.waterOld, waterNew: f.waterNew, auxOld: f.auxOld, auxNew: f.auxNew,
       svc: Object.fromEntries(Object.entries(f.svc).map(([k, v]) => [k, v])), extras: f.extras, discount: f.discount, debt: f.debt,
     };
     let res: SaveResult;
@@ -210,7 +214,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
     const useLines = stored?.lines && stored.lines.length && !dirty(r) ? stored.lines : calc(r).lines;
     for (const l of useLines) {
       if (l.label === "Nợ kỳ trước") continue;
-      if (l.label === "Tiền điện") thu.dien += l.amount;
+      if (l.label === "Tiền điện" || l.detail.includes("kWh ×")) thu.dien += l.amount; // gồm cả dòng đồng hồ điện phụ (cộng hoặc trừ)
       else if (l.label === "Tiền nước") thu.nuoc += l.amount;
       else if (l.label === "Tiền thuê phòng" || l.label === "Tiền phòng" || l.label.startsWith("Giảm") || l.label === "Tính thêm") thu.tien_phong += l.amount;
       else if (l.detail === "Phụ phí phát sinh") thu.phat_sinh += l.amount;
@@ -224,7 +228,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
     const ls = stored?.lines && stored.lines.length && !dirty(r) ? stored.lines : calc(r).lines;
     let elec = 0, water = 0, svc = 0;
     for (const l of ls) {
-      if (l.label === "Tiền điện") elec += l.amount;
+      if (l.label === "Tiền điện" || l.detail.includes("kWh ×")) elec += l.amount;
       else if (l.label === "Tiền nước") water += l.amount;
       else if (l.label === "Nợ kỳ trước" || l.label === "Tiền thuê phòng" || l.label === "Tiền phòng" || l.label.startsWith("Giảm") || l.label === "Tính thêm" || l.detail === "Phụ phí phát sinh") continue;
       else svc += l.amount;
@@ -237,6 +241,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
   // Nước chỉ nhập chỉ số ở phòng thu theo chỉ số; phòng thu theo người hoặc theo phòng không có ô nhập nước
   const meterRooms = rooms.filter((r) => r.input.waterMode === "meter");
   const anyMeter = meterRooms.length > 0;
+  const anyAux = rooms.some((r) => r.prefs.aux);
   const scope = tab === "water" ? meterRooms : rooms;
   const filled = scope.filter((r) => num(forms[r.id][tab === "water" ? "waterNew" : "elecNew"]) !== null).length;
   const scopeN = Math.max(1, scope.length);
@@ -335,6 +340,19 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
                 <span className="text-gray-600">{used !== null && used >= 0 ? `Dùng ${Math.round(used * 10) / 10} ${isW ? "m³" : "kWh"} = ` : ""}{used !== null && used >= 0 ? <b>{vnd(isW ? c.water : c.elec)}</b> : <span className="text-gray-400">chưa nhập số mới</span>}</span>
                 {warn && <span className={`text-xs ${used! < 0 ? "text-red-700" : "text-amber-700"}`}>⚠ {warn}</span>}
               </div>
+              {!isW && r.prefs.aux && (
+                <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 p-2">
+                  <div className="text-xs font-medium text-amber-900">{r.prefs.aux.name} ({r.prefs.aux.mode === "sub" ? "trừ vào tiền điện" : "cộng thêm vào hóa đơn"})</div>
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <label className="block text-xs text-gray-600">Số cũ
+                      <input type="number" step="0.1" min="0" inputMode="decimal" data-room={r.id} value={f.auxOld} onChange={(e) => setF(r.id, { auxOld: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} mt-1 py-2.5 bg-gray-50`} />
+                    </label>
+                    <label className="block text-xs text-gray-600">Số mới
+                      <input type="number" step="0.1" min="0" inputMode="decimal" data-room={r.id} value={f.auxNew} placeholder="Nhập số mới" onChange={(e) => setF(r.id, { auxNew: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inp} mt-1 py-2.5`} />
+                    </label>
+                  </div>
+                </div>
+              )}
               </>)}
 
               <div className="mt-3 flex items-end justify-between rounded-xl bg-brand-50 px-3 py-2.5">
@@ -451,14 +469,50 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
                 );
               })}
             </Row>
+            {anyAux && (
+              <>
+                <Row label="Đồng hồ phụ cũ" tone="elec">
+                  {rooms.map((r) => {
+                    const a = r.prefs.aux;
+                    if (!a) return <td key={r.id} className={`${cell} text-center text-[11px] text-amber-800/40`}>—</td>;
+                    return (
+                      <td key={r.id} className={cell}>
+                        <div className="mb-0.5 text-[10px] leading-tight text-amber-900">{a.name} <b>({a.mode === "sub" ? "trừ" : "cộng"})</b></div>
+                        <div className="relative">
+                          <input type="number" min="0" step="0.1" inputMode="decimal" data-room={r.id} value={forms[r.id].auxOld} onChange={(e) => setF(r.id, { auxOld: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} tabular-nums pr-9`} />
+                          <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[10px] text-gray-400">kWh</span>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </Row>
+                <Row label="Đồng hồ phụ mới" tone="elec">
+                  {rooms.map((r) => {
+                    if (!r.prefs.aux) return <td key={r.id} className={`${cell} text-center text-[11px] text-amber-800/40`}>—</td>;
+                    const f = forms[r.id];
+                    const bad = num(f.auxNew) !== null && (num(f.auxNew) ?? 0) < (num(f.auxOld) ?? r.auxOldAuto);
+                    return (
+                      <td key={r.id} className={cell}>
+                        <input type="number" min="0" step="0.1" inputMode="decimal" data-room={r.id} value={f.auxNew} placeholder="Nhập số mới" onChange={(e) => setF(r.id, { auxNew: e.target.value })} onBlur={() => commit(r.id)} onKeyDown={(e) => onKey(e, r.id)} className={`${inpT} ${bad ? "border-red-500 bg-red-50" : ""}`} />
+                        {bad && <div className="mt-0.5 text-[11px] text-red-700">⚠ Nhỏ hơn số cũ</div>}
+                      </td>
+                    );
+                  })}
+                </Row>
+              </>
+            )}
             <Row label="Tiền điện" calc tone="elec" tot={T(thu.dien)}>{rooms.map((r) => {
               const f = forms[r.id]; const c = calc(r);
               const has = num(f.elecNew) !== null;
               const used = has ? Math.max(0, (num(f.elecNew) ?? 0) - (num(f.elecOld) ?? 0)) : 0;
+              const ax = r.prefs.aux ? buildInput(r, f).aux : null;
+              const auxKwh = ax && ax.new !== null ? Math.max(0, ax.new - ax.old) : 0;
+              const auxMoney = Math.round(auxKwh * r.input.elecPrice);
               return (
                 <td key={r.id} className={`${cell} text-right`}>
                   {has ? <div className="text-[15px] font-bold leading-tight text-amber-900">{vnd(c.elec)}</div> : <div className="text-sm text-amber-700/50">—</div>}
                   <div className="text-[10.5px] leading-tight text-amber-800/70">{has ? `${Math.round(used * 10) / 10} kWh × ${fmtMoney(r.input.elecPrice)}` : "chưa nhập số mới"}</div>
+                  {ax && auxMoney > 0 && <div className="text-[10.5px] font-medium leading-tight text-amber-900">{ax.mode === "sub" ? "−" : "+"} {vnd(auxMoney)} {ax.name.toLowerCase()}</div>}
                 </td>
               );
             })}</Row>

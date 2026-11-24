@@ -19,6 +19,8 @@ export type SvcInput = {
 export type RoomInput = {
   people: number; vehicles: number; rent: number;
   elecOld: number; elecNew: number | null; elecPrice: number;
+  /** Đồng hồ điện phụ của phòng (null = không có): add = cộng thêm (VD nhà vệ sinh), sub = trừ đi (VD máy bơm). Cùng giá điện với đồng hồ chính. */
+  aux?: { name: string; mode: "add" | "sub"; old: number; new: number | null } | null;
   /** Cách thu nước: meter = theo chỉ số (m³), person = theo người, room = cố định mỗi phòng */
   waterMode: WaterMode; waterOld: number; waterNew: number | null; waterPrice: number;
   services: SvcInput[];
@@ -45,6 +47,14 @@ export function computeInvoice(r: RoomInput): { lines: Line[]; total: number; el
     const kwh = Math.max(0, r.elecNew - r.elecOld);
     elec = Math.round(kwh * r.elecPrice);
     lines.push({ label: "Tiền điện", detail: `${r.elecOld} → ${r.elecNew} = ${kwh} kWh × ${vnd(r.elecPrice)}`, amount: elec });
+  }
+  // Đồng hồ phụ: cộng thêm hoặc trừ vào tiền điện của phòng
+  if (r.aux && r.aux.new !== null && r.aux.new !== r.aux.old) {
+    const kwh = Math.max(0, r.aux.new - r.aux.old);
+    const money = Math.round(kwh * r.elecPrice);
+    const signed = r.aux.mode === "sub" ? -money : money;
+    elec += signed;
+    lines.push({ label: r.aux.mode === "sub" ? `Trừ ${r.aux.name.charAt(0).toLowerCase()}${r.aux.name.slice(1)}` : r.aux.name, detail: `${r.aux.old} → ${r.aux.new} = ${kwh} kWh × ${vnd(r.elecPrice)}`, amount: signed });
   }
   let water = 0;
   if (r.waterMode === "person") {

@@ -355,6 +355,8 @@ export type RoomMonthInput = {
   roomId: number; houseId: number; month: string;
   people: string; rent: string; periodStart: string; periodEnd: string;
   elecOld: string; elecNew: string; waterOld: string; waterNew: string;
+  /** Đồng hồ điện phụ (chỉ có ở phòng đã bật) */
+  auxOld?: string; auxNew?: string;
   svc: Record<string, string>; extras: { name: string; amount: string }[];
   discount: string; debt: string;
 };
@@ -386,6 +388,11 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
     }
     if (en !== null && en < (eo ?? 0)) return { ok: false, error: `Số điện mới (${en}) nhỏ hơn số cũ (${eo ?? 0})` };
     if (wn !== null && wn < (wo ?? 0)) return { ok: false, error: `Số nước mới (${wn}) nhỏ hơn số cũ (${wo ?? 0})` };
+    const ao = toNum(inp.auxOld), an = toNum(inp.auxNew);
+    for (const [v, name] of [[ao, "đồng hồ phụ cũ"], [an, "đồng hồ phụ mới"]] as const) {
+      if (v !== null && Number.isNaN(v)) return { ok: false, error: `Ô "${name}" phải là số` };
+    }
+    if (an !== null && an < (ao ?? base.auxOldAuto)) return { ok: false, error: `Số đồng hồ phụ mới (${an}) nhỏ hơn số cũ (${ao ?? base.auxOldAuto})` };
     for (const d of [inp.periodStart, inp.periodEnd]) if (d && !DATE_RE.test(d)) return { ok: false, error: "Kỳ hạn phải là ngày hợp lệ" };
 
     const R = room.id, M = inp.month;
@@ -424,6 +431,11 @@ export async function saveRoomMonth(inp: RoomMonthInput): Promise<SaveResult> {
       const amount = toNum(e.amount);
       if (amount !== null && Number.isNaN(amount)) return { ok: false, error: "Số tiền phụ phí phải là số" };
       if (name && amount) st.push({ sql: "INSERT INTO extras(room_id,month,name,amount) VALUES (?,?,?,?)", args: [R, M, name, Math.round(amount)] });
+    }
+    // Đồng hồ điện phụ: chỉ lưu cho phòng đã bật; số cũ trùng số tự động thì không lưu (để tháng trước sửa còn tự nối)
+    if (base.prefs.aux) {
+      setMonth("aux_old", ao === null ? null : String(ao), String(base.auxOldAuto));
+      setMonth("aux_new", an === null ? null : String(an), null);
     }
     // Chỉ số điện nước
     if (en !== null || wn !== null) {
@@ -468,6 +480,8 @@ export type RoomProfileInput = {
   roomId: number; month: string;
   code: string; tenantName: string; phone: string; people: string; rent: string; dueDay: string; note: string;
   elecPrice: string; waterPrice: string; elecStart: string; waterStart: string;
+  /** Đồng hồ điện phụ: bật, tên, kiểu (add = cộng thêm, sub = trừ đi), số đầu vào */
+  auxOn?: boolean; auxName?: string; auxMode?: string; auxStart?: string;
   svc: Record<string, { unit: string; off: boolean }>;
   /** Dịch vụ mới thêm ngay trong ô Sửa (Wifi, Máy giặt + sấy...) */
   newSvc?: { name: string; type: string; price: string; scope: string }[];
@@ -492,6 +506,20 @@ export async function saveRoomProfile(inp: RoomProfileInput): Promise<{ ok: true
     };
     pref("elec_price", n(inp.elecPrice));
     pref("water_price", n(inp.waterPrice));
+    // Đồng hồ điện phụ của phòng
+    const prefText = (key: string, value: string | null) => {
+      if (value === null) st.push({ sql: "DELETE FROM room_prefs WHERE room_id=? AND key=?", args: [room.id, key] });
+      else st.push({ sql: "INSERT INTO room_prefs(room_id,key,value) VALUES (?,?,?) ON CONFLICT(room_id,key) DO UPDATE SET value=excluded.value", args: [room.id, key, value] });
+    };
+    if (inp.auxOn) {
+      prefText("aux_on", "1");
+      prefText("aux_name", String(inp.auxName ?? "").trim().slice(0, 60) || (inp.auxMode === "sub" ? "Điện máy bơm" : "Điện nhà vệ sinh"));
+      prefText("aux_mode", inp.auxMode === "sub" ? "sub" : "add");
+      const as = n(inp.auxStart ?? "");
+      prefText("aux_start", as === null ? null : String(Math.max(0, as)));
+    } else {
+      for (const k of ["aux_on", "aux_name", "aux_mode", "aux_start"]) prefText(k, null);
+    }
     for (const [sid, v] of Object.entries(inp.svc ?? {})) {
       if (!/^\d+$/.test(sid)) continue;
       pref(`svc:${sid}`, n(v.unit));
