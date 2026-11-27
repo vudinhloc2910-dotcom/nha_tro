@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /** Nút sao chép: chép link hóa đơn, hoặc cả tin nhắn có sẵn link (thay {link} bằng địa chỉ đầy đủ). */
-export function CopyButton({ path, label, message, primary, zaloPhone, onZalo }: { path: string; label: string; message?: string; primary?: boolean; zaloPhone?: string; onZalo?: () => void }) {
+export function CopyButton({ path, label, message, primary, zaloPhone, onZalo, onCopied }: { path: string; label: string; message?: string; primary?: boolean; zaloPhone?: string; onZalo?: () => void; onCopied?: () => void }) {
   const [done, setDone] = useState(false);
 
   async function copy() {
@@ -22,6 +22,7 @@ export function CopyButton({ path, label, message, primary, zaloPhone, onZalo }:
     // Có số điện thoại thì mở luôn Zalo của khách: chỉ việc dán tin nhắn đã chép
     const z = (zaloPhone ?? "").replace(/[^\d]/g, "");
     if (z.length >= 9) { window.open(`https://zalo.me/${z.startsWith("84") ? "0" + z.slice(2) : z}`, "_blank", "noopener"); onZalo?.(); }
+    onCopied?.();
     setDone(true);
     setTimeout(() => setDone(false), 1800);
   }

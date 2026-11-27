@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { applyDueDayToMonth, saveRoomMonth, saveRoomNote, saveRoomProfile, type RoomMonthInput, type SaveResult } from "./actions";
+import { applyDueDayToMonth, saveRoomMonth, saveRoomNote, saveRoomProfile, setInvoiceSent, type RoomMonthInput, type SaveResult } from "./actions";
 import { StatusBadge } from "./components";
 import { CopyButton } from "./copy-button";
 import { DateVN } from "./date-input";
@@ -61,7 +61,12 @@ function buildInput(r: RoomView, f: Form): RoomInput {
 }
 
 /** Màu cả cột phòng theo trạng thái thu tiền (Chưa thu giữ nguyên, không tô). */
-const COL_STYLE: Partial<Record<Status, { head: string; bar: string; tint: string; edge: string; glow: string; card: string }>> = {
+const COL_STYLE: Partial<Record<Status | "sent", { head: string; bar: string; tint: string; edge: string; glow: string; card: string }>> = {
+  sent: {
+    head: "linear-gradient(180deg,#fef08a 0%,#fef9c3 55%,#fefce8 100%)", bar: "#eab308", glow: "0 6px 14px -8px rgba(234,179,8,.6)",
+    tint: "linear-gradient(180deg,rgba(250,204,21,.2) 0%,rgba(250,204,21,.08) 100%)", edge: "rgba(202,138,4,.38)",
+    card: "linear-gradient(135deg,#fefce8 0%,#ffffff 60%)",
+  },
   paid: {
     head: "linear-gradient(180deg,#a7f3d0 0%,#d1fae5 55%,#ecfdf5 100%)", bar: "#059669", glow: "0 6px 14px -8px rgba(5,150,105,.55)",
     tint: "linear-gradient(180deg,rgba(16,185,129,.12) 0%,rgba(16,185,129,.045) 100%)", edge: "rgba(5,150,105,.32)",
@@ -73,9 +78,9 @@ const COL_STYLE: Partial<Record<Status, { head: string; bar: string; tint: strin
     card: "linear-gradient(135deg,#fff1f2 0%,#ffffff 60%)",
   },
   partial: {
-    head: "linear-gradient(180deg,#fde68a 0%,#fef3c7 55%,#fffbeb 100%)", bar: "#d97706", glow: "0 6px 14px -8px rgba(217,119,6,.5)",
-    tint: "linear-gradient(180deg,rgba(245,158,11,.12) 0%,rgba(245,158,11,.045) 100%)", edge: "rgba(217,119,6,.32)",
-    card: "linear-gradient(135deg,#fffbeb 0%,#ffffff 60%)",
+    head: "linear-gradient(180deg,#fed7aa 0%,#ffedd5 55%,#fff7ed 100%)", bar: "#ea580c", glow: "0 6px 14px -8px rgba(234,88,12,.5)",
+    tint: "linear-gradient(180deg,rgba(249,115,22,.14) 0%,rgba(249,115,22,.05) 100%)", edge: "rgba(234,88,12,.34)",
+    card: "linear-gradient(135deg,#fff7ed 0%,#ffffff 60%)",
   },
 };
 
@@ -120,6 +125,20 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
       </>
     );
   };
+  // Đã gửi hóa đơn cho khách (bấm "Chép tin nhắn"): phòng Chưa thu đổi sang màu vàng "Đã gửi"
+  const [sent, setSent] = useState<Record<number, boolean>>(() => Object.fromEntries(rooms.map((r) => [r.id, !!r.sentAt])));
+  function markSent(id: number, v: boolean) {
+    setSent((p) => ({ ...p, [id]: v }));
+    void setInvoiceSent(id, month, v).then((res) => { if (!res.ok) setSent((p) => ({ ...p, [id]: !v })); }).catch(() => setSent((p) => ({ ...p, [id]: !v })));
+  }
+  const colKey = (id: number, st: Status | null): Status | "sent" | null => (st === "unpaid" && sent[id] ? "sent" : st);
+  const sentBadge = (id: number, st: Status | null) => (
+    <>
+      {st === "unpaid" && sent[id] && <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-900">Đã gửi</span>}
+      {st === "overdue" && sent[id] && <span className="text-[11px] text-gray-500">(đã gửi)</span>}
+      {(st === "unpaid" || st === "overdue") && sent[id] && <button type="button" onClick={() => markSent(id, false)} className="text-[11px] text-gray-500 underline hover:text-gray-800">bỏ đánh dấu</button>}
+    </>
+  );
   const mm = month.slice(5);
   const [tab, setTab] = useState<"elec" | "water">("elec");
 
@@ -250,7 +269,8 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
   // Tô màu cả cột phòng theo trạng thái: cột thứ i của bảng = phần tử con thứ i+2 của mỗi hàng (cột đầu là nhãn hàng)
   const colCss = rooms.map((r, i) => {
     const inv = invs[r.id];
-    const c = inv ? COL_STYLE[statusOf(inv.total, inv.paid, inv.due, inv.state ?? "")] : undefined;
+    const ck = inv ? colKey(r.id, statusOf(inv.total, inv.paid, inv.due, inv.state ?? "")) : null;
+    const c = ck ? COL_STYLE[ck] : undefined;
     return c ? `.mg-grid tbody td:nth-child(${i + 2}){background-image:${c.tint};box-shadow:inset 1px 0 0 ${c.edge},inset -1px 0 0 ${c.edge}}` : "";
   }).join("");
 
@@ -316,10 +336,10 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
           const setExtras = (extras: Form["extras"], save = false) => { latest.current = { ...latest.current, [r.id]: { ...latest.current[r.id], extras } }; setF(r.id, { extras }); if (save) setTimeout(() => commit(r.id), 0); };
           return (
             <div key={r.id} className={`rounded-2xl border bg-white p-3 shadow-sm ${st === "overdue" ? "border-red-300" : "border-stone-200"}`}
-              style={st && COL_STYLE[st] ? { backgroundImage: COL_STYLE[st]!.card, borderLeft: `5px solid ${COL_STYLE[st]!.bar}` } : undefined}>
+              style={colKey(r.id, st) && COL_STYLE[colKey(r.id, st)!] ? { backgroundImage: COL_STYLE[colKey(r.id, st)!]!.card, borderLeft: `5px solid ${COL_STYLE[colKey(r.id, st)!]!.bar}` } : undefined}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2"><span className="text-lg font-bold">Phòng {r.code}</span>{st && <StatusBadge status={st} />}</div>
+                  <div className="flex flex-wrap items-center gap-2"><span className="text-lg font-bold">Phòng {r.code}</span>{st && st === "unpaid" && sent[r.id] ? null : st && <StatusBadge status={st} />}{sentBadge(r.id, st)}</div>
                   <div className="truncate text-sm text-gray-600">{r.tenantName}{r.phone ? ` · ${r.phone}` : ""} · {f.people} người</div>
                 </div>
                 <button type="button" onClick={() => setEditing(r)} className="shrink-0 rounded-xl border border-brand-300 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-800">Sửa</button>
@@ -407,7 +427,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
               <div className={`mt-2 text-xs ${stt?.state === "error" ? "font-medium text-red-700" : stt?.state === "saving" ? "text-gray-500" : "text-green-700"}`}>{stt?.msg ?? (inv ? "" : "Chưa có hóa đơn: nhập số điện mới")}</div>
               {inv && !dirty(r) && (
                 <div className="mt-1 flex flex-wrap gap-2">
-                  <CopyButton path={path} message={msg} label={r.phone ? "Chép tin & mở Zalo" : "Chép tin nhắn"} primary zaloPhone={r.phone} />
+                  <CopyButton path={path} message={msg} label={r.phone ? "Chép tin & mở Zalo" : "Chép tin nhắn"} primary zaloPhone={r.phone} onCopied={() => { if (!sent[r.id]) markSent(r.id, true); }} />
                   <CopyButton path={path} label="Chép link" />
                   <Link href={path} target="_blank" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800">Xem hóa đơn</Link>
                   <Link href={`/invoices/${inv.id}`} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800">Thu tiền</Link>
@@ -427,7 +447,8 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
               {rooms.map((r) => {
                 const inv = invs[r.id];
                 const st = inv ? statusOf(inv.total, inv.paid, inv.due, inv.state ?? "") : null;
-                const cs = st ? COL_STYLE[st] : undefined;
+                const ck = colKey(r.id, st);
+                const cs = ck ? COL_STYLE[ck] : undefined;
                 return (
                   <th key={r.id} className="sticky top-0 z-20 min-w-[8.75rem] border-b border-gray-200 bg-gray-50 px-1.5 py-1 text-left align-top shadow-[0_1px_0_0_#e5e7eb]"
                     style={cs ? { backgroundImage: cs.head, boxShadow: `inset 0 4px 0 ${cs.bar}, ${cs.glow}` } : undefined}>
@@ -437,7 +458,8 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
                     </div>
                     <div className="truncate text-[11px] font-normal leading-tight text-gray-600" title={r.tenantName}>{r.tenantName}{r.phone ? ` · ${r.phone}` : ""}</div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                      {st && <StatusBadge status={st} />}
+                      {st && st === "unpaid" && sent[r.id] ? null : st && <StatusBadge status={st} />}
+                      {sentBadge(r.id, st)}
                       {inv?.locked && !dirty(r) ? <span className="text-[11px] font-normal text-brand-700">(từ sheet)</span> : null}
                     </div>
                   </th>
@@ -638,7 +660,7 @@ export function MonthGrid({ month, houseId, houseName, services, rooms, vacant, 
                     <div className={`mb-1 text-[11px] ${st?.state === "error" ? "font-medium text-red-700" : st?.state === "saving" ? "text-gray-500" : "text-green-700"}`}>{st?.msg ?? (inv ? "" : "Chưa có hóa đơn: nhập số điện mới")}</div>
                     {inv && !dirty(r) ? (
                       <div className="flex flex-wrap gap-1">
-                        <CopyButton path={path} message={msg} label={r.phone ? "Chép tin & mở Zalo" : "Chép tin nhắn"} primary zaloPhone={r.phone} />
+                        <CopyButton path={path} message={msg} label={r.phone ? "Chép tin & mở Zalo" : "Chép tin nhắn"} primary zaloPhone={r.phone} onCopied={() => { if (!sent[r.id]) markSent(r.id, true); }} />
                         <CopyButton path={path} label="Chép link" />
                         <Link href={path} target="_blank" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50">Xem hóa đơn</Link>
                         <Link href={`/invoices/${inv.id}`} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50">Thu tiền</Link>

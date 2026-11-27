@@ -549,6 +549,18 @@ export async function saveRoomNote(roomId: number, month: string, note: string):
   return { ok: true };
 }
 
+/** Đánh dấu (hoặc bỏ đánh dấu) đã gửi hóa đơn cho khách của một phòng trong một tháng. Không đụng đến số tiền. */
+export async function setInvoiceSent(roomId: number, month: string, sent: boolean): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!MONTH_RE.test(month)) return { ok: false, error: "Tháng không hợp lệ" };
+  const h = await currentHouse();
+  const room = await one<{ id: number }>("SELECT id FROM rooms WHERE id=? AND house_id=?", Number(roomId), h.id);
+  if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+  if (!sent) await run("DELETE FROM room_month WHERE room_id=? AND month=? AND key='sent_at'", room.id, month);
+  else await run("INSERT INTO room_month(room_id,month,key,value) VALUES (?,?,'sent_at',?) ON CONFLICT(room_id,month,key) DO UPDATE SET value=excluded.value", room.id, month, new Date().toISOString());
+  return { ok: true };
+}
+
 /* ---------- Ô "Sửa": thông tin cố định của phòng ---------- */
 export type RoomProfileInput = {
   roomId: number; month: string;
